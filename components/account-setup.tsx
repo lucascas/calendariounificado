@@ -16,32 +16,57 @@ export function AccountSetup({ onSetupComplete }: AccountSetupProps) {
   const [error, setError] = useState<string | null>(null)
   const { toast } = useToast()
 
-  // Verificar si hay cookies de autenticación al montar el componente
+  // Verificar si hay nuevas cuentas después de OAuth
   useEffect(() => {
-    const checkForAuthCookies = () => {
-      const cookies = document.cookie.split("; ")
-      const hasGoogleAuth = cookies.some((cookie) => cookie.startsWith("google-auth="))
-      const hasMicrosoftAuth = cookies.some((cookie) => cookie.startsWith("microsoft-auth="))
+    const checkForNewAccounts = async () => {
+      try {
+        const response = await fetch("/api/calendar-accounts")
+        if (response.ok) {
+          const data = await response.json()
+          const accounts = data.accounts || []
 
-      if (hasGoogleAuth || hasMicrosoftAuth) {
-        console.log("Se detectaron cookies de autenticación, notificando configuración completada")
-        if (onSetupComplete) {
-          onSetupComplete()
+          if (accounts.length > 0) {
+            console.log("Se detectaron nuevas cuentas de calendario")
+            toast({
+              title: "¡Calendario conectado!",
+              description: "Tu calendario se ha conectado exitosamente.",
+              variant: "default",
+            })
+
+            if (onSetupComplete) {
+              onSetupComplete()
+            }
+          }
         }
+      } catch (error) {
+        console.error("Error al verificar cuentas:", error)
       }
     }
 
-    checkForAuthCookies()
-  }, [onSetupComplete])
+    // Verificar inmediatamente y luego cada 2 segundos por 10 segundos
+    checkForNewAccounts()
+
+    const interval = setInterval(checkForNewAccounts, 2000)
+    const timeout = setTimeout(() => {
+      clearInterval(interval)
+    }, 10000)
+
+    return () => {
+      clearInterval(interval)
+      clearTimeout(timeout)
+    }
+  }, [onSetupComplete, toast])
 
   const connectGoogle = () => {
     setIsConnecting("google")
+    setError(null)
+
     try {
       console.log("Iniciando conexión con Google Calendar...")
-      // Redirección directa
       window.location.href = "/api/auth/google"
     } catch (error) {
       console.error("Error al conectar con Google:", error)
+      setError("No se pudo conectar con Google. Inténtalo de nuevo.")
       toast({
         title: "Error de conexión",
         description: "No se pudo conectar con Google. Inténtalo de nuevo.",
@@ -53,12 +78,14 @@ export function AccountSetup({ onSetupComplete }: AccountSetupProps) {
 
   const connectMicrosoft = () => {
     setIsConnecting("microsoft")
+    setError(null)
+
     try {
       console.log("Iniciando conexión con Microsoft Teams...")
-      // Redirección directa
       window.location.href = "/api/auth/microsoft"
     } catch (error) {
       console.error("Error al conectar con Microsoft:", error)
+      setError("No se pudo conectar con Microsoft. Inténtalo de nuevo.")
       toast({
         title: "Error de conexión",
         description: "No se pudo conectar con Microsoft. Inténtalo de nuevo.",
@@ -96,7 +123,7 @@ export function AccountSetup({ onSetupComplete }: AccountSetupProps) {
               disabled={isConnecting !== null}
             >
               <Google className="mr-2 h-4 w-4" />
-              <span>Conectar Google Calendar</span>
+              <span>{isConnecting === "google" ? "Conectando..." : "Conectar Google Calendar"}</span>
             </Button>
 
             <Button
@@ -106,7 +133,7 @@ export function AccountSetup({ onSetupComplete }: AccountSetupProps) {
               disabled={isConnecting !== null}
             >
               <Microsoft className="mr-2 h-4 w-4" />
-              <span>Conectar Microsoft Teams</span>
+              <span>{isConnecting === "microsoft" ? "Conectando..." : "Conectar Microsoft Teams"}</span>
             </Button>
           </div>
         </CardContent>

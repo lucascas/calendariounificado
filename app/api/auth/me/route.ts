@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server"
 import { verify } from "jsonwebtoken"
 import { UserService } from "@/lib/db/services/user-service"
-
-// Clave secreta para JWT (debería estar en variables de entorno)
-const JWT_SECRET = process.env.JWT_SECRET || "calendario_unificado_secret_key"
+import { authConfig } from "@/lib/auth-config"
 
 export async function GET(request: Request) {
   try {
@@ -29,7 +27,7 @@ export async function GET(request: Request) {
 
     try {
       // Verificar el token
-      const decoded = verify(token, JWT_SECRET) as { id: string; username: string }
+      const decoded = verify(token, authConfig.jwt.secret) as { id: string; email: string; name?: string }
 
       // Obtener el usuario de la base de datos
       const user = await UserService.getUserById(decoded.id)
@@ -45,6 +43,8 @@ export async function GET(request: Request) {
           username: user.username,
           email: user.email,
           name: user.name,
+          authProvider: user.authProvider,
+          picture: user.picture,
         },
         authenticated: true,
       })
@@ -55,6 +55,6 @@ export async function GET(request: Request) {
     }
   } catch (error) {
     console.error("Error al obtener usuario:", error)
-    return NextResponse.json({ user: null, authenticated: false, error: "Error interno" }, { status: 200 })
+    return NextResponse.json({ user: null, authenticated: false, error: "Error interno" }, { status: 500 })
   }
 }

@@ -6,9 +6,7 @@ import { CalendarView } from "@/components/calendar-view"
 import { AccountSetup } from "@/components/account-setup"
 import { LoginForm } from "@/components/login-form"
 import { useToast } from "@/hooks/use-toast"
-import { calendarStorage } from "@/lib/calendar-storage"
 import type { CalendarAccount } from "@/lib/types"
-import { v4 as uuidv4 } from "uuid"
 
 export function ClientCalendarApp() {
   const [calendarAccounts, setCalendarAccounts] = useState<CalendarAccount[]>([])
@@ -17,177 +15,100 @@ export function ClientCalendarApp() {
   const [needsCalendarSetup, setNeedsCalendarSetup] = useState(false)
   const { toast } = useToast()
 
-  // Función para parsear cookies
-  const parseCookies = () => {
-    const cookieObj: Record<string, string> = {}
-    const cookies = document.cookie.split("; ")
-
-    cookies.forEach((cookie) => {
-      if (cookie) {
-        const parts = cookie.split("=")
-        if (parts.length >= 2) {
-          const [name, ...valueParts] = parts
-          cookieObj[name] = valueParts.join("=")
-        }
-      }
-    })
-
-    return cookieObj
-  }
-
   // Verificar autenticación y cargar datos
   useEffect(() => {
-    const checkAuth = async () => {
-      // Verificar autenticación en localStorage (método simple)
-      const isAuth = localStorage.getItem("isAuthenticated") === "true"
-      setIsAuthenticated(isAuth)
-
-      if (isAuth) {
-        await loadCalendarData()
-      } else {
-        // Si no está autenticado, no intentar cargar datos ni hacer llamadas a la API
-        setIsLoading(false)
-        setNeedsCalendarSetup(false) // Asegurarse de que muestre el formulario de login
-      }
-    }
-
-    checkAuth()
+    checkAuthAndLoadData()
   }, [])
 
-  // Función para cargar datos de calendario
-  const loadCalendarData = async () => {
+  const checkAuthAndLoadData = async () => {
     try {
       setIsLoading(true)
-      console.log("Cargando datos de calendario...")
+      console.log("Verificando autenticación...")
 
-      // Verificar si hay cookies de autenticación de calendario
-      const cookies = parseCookies()
-      let hasProcessedNewAccount = false
+      // Verificar autenticación con la API
+      const authResponse = await fetch("/api/auth/me")
+      const authData = await authResponse.json()
 
-      // Procesar cuenta de Google si existe en cookies
-      if (cookies["google-auth"]) {
-        console.log("Cookie de Google encontrada")
-        hasProcessedNewAccount = true
+      if (authData.authenticated && authData.user) {
+        console.log("Usuario autenticado:", authData.user.email)
+        setIsAuthenticated(true)
 
-        try {
-          // Intentar decodificar y parsear la cookie
-          let authData
-          try {
-            authData = JSON.parse(decodeURIComponent(cookies["google-auth"]))
-          } catch (e) {
-            // Si falla, intentar parsear directamente
-            authData = JSON.parse(cookies["google-auth"])
-          }
-
-          console.log("Datos de autenticación de Google parseados correctamente")
-
-          // Crear o actualizar la cuenta
-          const googleAccount: CalendarAccount = {
-            id: authData.user?.id || uuidv4(),
-            provider: "google",
-            email: authData.user?.email || "usuario@gmail.com",
-            accessToken: authData.access_token,
-            refreshToken: authData.refresh_token,
-            expiresAt: authData.expires_at,
-          }
-
-          // Guardar la cuenta en localStorage
-          calendarStorage.addOrUpdateAccount(googleAccount)
-
-          toast({
-            title: "Calendario conectado",
-            description: "Se ha conectado Google Calendar correctamente.",
-            variant: "default",
-          })
-        } catch (e) {
-          console.error("Error al parsear la cookie de Google:", e)
-        }
-
-        // Limpiar la cookie después de procesarla
-        document.cookie = "google-auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;"
+        // Cargar cuentas de calendario desde la API
+        await loadCalendarAccounts()
+      } else {
+        console.log("Usuario no autenticado")
+        setIsAuthenticated(false)
+        setNeedsCalendarSetup(false)
       }
-
-      // Procesar cuenta de Microsoft si existe en cookies
-      if (cookies["microsoft-auth"]) {
-        console.log("Cookie de Microsoft encontrada")
-        hasProcessedNewAccount = true
-
-        try {
-          // Intentar decodificar y parsear la cookie
-          let authData
-          try {
-            authData = JSON.parse(decodeURIComponent(cookies["microsoft-auth"]))
-          } catch (e) {
-            // Si falla, intentar parsear directamente
-            authData = JSON.parse(cookies["microsoft-auth"])
-          }
-
-          console.log("Datos de autenticación de Microsoft parseados correctamente")
-
-          // Crear o actualizar la cuenta
-          const microsoftAccount: CalendarAccount = {
-            id: authData.user?.id || uuidv4(),
-            provider: "microsoft",
-            email: authData.user?.email || "usuario@outlook.com",
-            accessToken: authData.access_token,
-            refreshToken: authData.refresh_token,
-            expiresAt: authData.expires_at,
-          }
-
-          // Guardar la cuenta en localStorage
-          calendarStorage.addOrUpdateAccount(microsoftAccount)
-
-          toast({
-            title: "Calendario conectado",
-            description: "Se ha conectado Microsoft Calendar correctamente.",
-            variant: "default",
-          })
-        } catch (e) {
-          console.error("Error al parsear la cookie de Microsoft:", e)
-        }
-
-        // Limpiar la cookie después de procesarla
-        document.cookie = "microsoft-auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;"
-      }
-
-      // Cargar cuentas desde localStorage
-      const localAccounts = calendarStorage.getAccounts()
-      setCalendarAccounts(localAccounts)
-      setNeedsCalendarSetup(localAccounts.length === 0)
-      console.log("Cuentas cargadas desde localStorage:", localAccounts.length)
     } catch (error) {
-      console.error("Error al cargar datos de calendario:", error)
-      // No establecer needsCalendarSetup a true si hay un error
-      // para evitar mostrar la pantalla de configuración cuando debería mostrar login
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar los datos del calendario. Por favor, inicia sesión nuevamente.",
-        variant: "destructive",
-      })
-      // Si hay un error grave, cerrar sesión
-      localStorage.removeItem("isAuthenticated")
+      console.error("Error al verificar autenticación:", error)
       setIsAuthenticated(false)
+      setNeedsCalendarSetup(false)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const loadCalendarAccounts = async () => {
+    try {
+      console.log("Cargando cuentas de calendario desde la API...")
+
+      const response = await fetch("/api/calendar-accounts")
+
+      if (response.ok) {
+        const data = await response.json()
+        const accounts = data.accounts || []
+
+        console.log("Cuentas cargadas desde la API:", accounts.length)
+        setCalendarAccounts(accounts)
+        setNeedsCalendarSetup(accounts.length === 0)
+
+        if (accounts.length > 0) {
+          toast({
+            title: "Calendarios cargados",
+            description: `Se cargaron ${accounts.length} cuenta(s) de calendario.`,
+            variant: "default",
+          })
+        }
+      } else if (response.status === 401) {
+        // No autorizado, cerrar sesión
+        console.log("Token expirado, cerrando sesión")
+        setIsAuthenticated(false)
+        setCalendarAccounts([])
+        setNeedsCalendarSetup(false)
+      } else {
+        throw new Error("Error al cargar cuentas de calendario")
+      }
+    } catch (error) {
+      console.error("Error al cargar cuentas de calendario:", error)
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar las cuentas de calendario.",
+        variant: "destructive",
+      })
+      setNeedsCalendarSetup(true)
     }
   }
 
   // Manejar inicio de sesión exitoso
   const handleLoginSuccess = () => {
     setIsAuthenticated(true)
-    loadCalendarData()
+    checkAuthAndLoadData()
   }
 
   // Manejar configuración de calendario exitosa
   const handleCalendarSetup = () => {
-    loadCalendarData()
+    loadCalendarAccounts()
   }
 
   // Mostrar estado de carga
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <p className="text-lg">Cargando aplicación...</p>
+        <div className="text-center space-y-2">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="text-lg">Cargando aplicación...</p>
+        </div>
       </div>
     )
   }
