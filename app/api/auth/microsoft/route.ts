@@ -19,6 +19,13 @@ export async function GET(request: Request) {
     const authUrl = new URL(authConfig.microsoft.endpoints.auth)
     const redirectUri = `${baseUrl}/api/auth/microsoft/callback`
 
+    // Agregar más logging para diagnosticar problemas de configuración
+    console.log("Configuración de Microsoft:")
+    console.log("- Client ID configurado:", !!authConfig.microsoft.clientId)
+    console.log("- Client Secret configurado:", !!authConfig.microsoft.clientSecret)
+    console.log("- Redirect URI:", redirectUri)
+    console.log("- Scopes solicitados:", authConfig.microsoft.scopes.join(" "))
+
     // Generar estado para seguridad CSRF
     const state = crypto.randomUUID()
 
