@@ -1,14 +1,14 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertCircle, Calendar, Mail } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { AlertCircle, Calendar, Mail, UserCheck } from "lucide-react"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
 import { Separator } from "@/components/ui/separator"
@@ -21,8 +21,50 @@ export default function RegisterPage() {
   const [name, setName] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [invitationData, setInvitationData] = useState<any>(null)
+  const [isValidatingInvitation, setIsValidatingInvitation] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { toast } = useToast()
+
+  const invitationToken = searchParams.get("invitation")
+
+  // Validar invitación si existe
+  useEffect(() => {
+    if (invitationToken) {
+      validateInvitation(invitationToken)
+    }
+  }, [invitationToken])
+
+  const validateInvitation = async (token: string) => {
+    setIsValidatingInvitation(true)
+    try {
+      const response = await fetch(`/api/invitations/validate?token=${token}`)
+      const data = await response.json()
+
+      if (response.ok && data.valid) {
+        setInvitationData(data)
+        setEmail(data.email) // Pre-llenar el email
+        toast({
+          title: "Invitación válida",
+          description: `Invitado por ${data.inviterName}`,
+          variant: "default",
+        })
+      } else {
+        setError(data.error || "Invitación inválida")
+        toast({
+          title: "Invitación inválida",
+          description: data.error || "La invitación no es válida o ha expirado",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error al validar invitación:", error)
+      setError("Error al validar la invitación")
+    } finally {
+      setIsValidatingInvitation(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -51,7 +93,13 @@ export default function RegisterPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ username, email, password, name }),
+        body: JSON.stringify({
+          username,
+          email,
+          password,
+          name,
+          invitationToken: invitationToken || undefined,
+        }),
       })
 
       const data = await response.json()
@@ -62,7 +110,9 @@ export default function RegisterPage() {
 
       toast({
         title: "Registro exitoso",
-        description: "Tu cuenta ha sido creada. Ahora puedes iniciar sesión.",
+        description: invitationData
+          ? `Tu cuenta ha sido creada y asociada con ${invitationData.inviterName}. Ahora puedes iniciar sesión.`
+          : "Tu cuenta ha sido creada. Ahora puedes iniciar sesión.",
       })
 
       router.push("/login")
@@ -81,11 +131,26 @@ export default function RegisterPage() {
   }
 
   const handleGoogleRegister = () => {
-    window.location.href = "/api/auth/google"
+    const url = invitationToken ? `/api/auth/google?invitation=${invitationToken}` : "/api/auth/google"
+    window.location.href = url
   }
 
   const handleMicrosoftRegister = () => {
-    window.location.href = "/api/auth/microsoft"
+    const url = invitationToken ? `/api/auth/microsoft?invitation=${invitationToken}` : "/api/auth/microsoft"
+    window.location.href = url
+  }
+
+  if (isValidatingInvitation) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="flex flex-col items-center justify-center p-6">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
+            <p>Validando invitación...</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -95,12 +160,25 @@ export default function RegisterPage() {
           <div className="flex items-center justify-center mb-4">
             <Calendar className="h-10 w-10 text-primary" />
           </div>
-          <CardTitle className="text-2xl text-center">Crear cuenta</CardTitle>
+          <CardTitle className="text-2xl text-center">
+            {invitationData ? "Aceptar invitación" : "Crear cuenta"}
+          </CardTitle>
           <CardDescription className="text-center">
-            Regístrate para comenzar a usar Calendario Unificado
+            {invitationData
+              ? `${invitationData.inviterName} te ha invitado a Calendario Unificado`
+              : "Regístrate para comenzar a usar Calendario Unificado"}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {invitationData && (
+            <Alert>
+              <UserCheck className="h-4 w-4" />
+              <AlertDescription>
+                Invitado por <strong>{invitationData.inviterName}</strong> ({invitationData.inviterEmail})
+              </AlertDescription>
+            </Alert>
+          )}
+
           {error && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
@@ -142,6 +220,7 @@ export default function RegisterPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
+                disabled={loading}
               />
             </div>
 
@@ -156,12 +235,19 @@ export default function RegisterPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                disabled={loading || !!invitationData} // Deshabilitar si viene de invitación
               />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="name">Nombre completo</Label>
-              <Input id="name" placeholder="Juan Pérez" value={name} onChange={(e) => setName(e.target.value)} />
+              <Input
+                id="name"
+                placeholder="Juan Pérez"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                disabled={loading}
+              />
             </div>
 
             <div className="space-y-2">
@@ -175,6 +261,7 @@ export default function RegisterPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                disabled={loading}
               />
             </div>
 
@@ -189,6 +276,7 @@ export default function RegisterPage() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
+                disabled={loading}
               />
             </div>
 

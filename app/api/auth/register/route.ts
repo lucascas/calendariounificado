@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/mongodb"
 import { User } from "@/lib/db/models/user"
+import { Invitation } from "@/lib/db/models/invitation"
 import bcrypt from "bcryptjs"
 
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { username, password, email, name } = body
+    const { username, password, email, name, invitationToken } = body
 
     if (!username || !password) {
       return NextResponse.json({ error: "Se requiere nombre de usuario y contraseña" }, { status: 400 })
@@ -15,10 +16,36 @@ export async function POST(request: Request) {
     // Conectar a la base de datos
     await connectToDatabase()
 
+    let invitation = null
+    let inviterId = null
+
+    // Si hay un token de invitación, validarlo
+    if (invitationToken) {
+      invitation = await Invitation.findOne({
+        token: invitationToken,
+        status: "pending",
+        expiresAt: { $gt: new Date() },
+      })
+
+      if (!invitation) {
+        return NextResponse.json({ error: "Invitación inválida o expirada" }, { status: 400 })
+      }
+
+      // Verificar que el email coincida con la invitación
+      if (invitation.email !== email) {
+        return NextResponse.json({ error: "El email no coincide con la invitación" }, { status: 400 })
+      }
+
+      inviterId = invitation.inviterId
+    }
+
     // Verificar si el usuario ya existe
-    const existingUser = await User.findOne({ username })
+    const existingUser = await User.findOne({
+      $or: [{ username }, { email }],
+    })
+
     if (existingUser) {
-      return NextResponse.json({ error: "El nombre de usuario ya está en uso" }, { status: 409 })
+      return NextResponse.json({ error: "El nombre de usuario o email ya está en uso" }, { status: 409 })
     }
 
     // Encriptar la contraseña
@@ -31,9 +58,17 @@ export async function POST(request: Request) {
       email,
       name,
       calendarAccounts: [],
+      invitedBy: inviterId, // Asociar con el usuario que invitó
     })
 
     await newUser.save()
+
+    // Si había una invitación, marcarla como aceptada
+    if (invitation) {
+      invitation.status = "accepted"
+      invitation.acceptedAt = new Date()
+      await invitation.save()
+    }
 
     return NextResponse.json(
       {
@@ -44,6 +79,7 @@ export async function POST(request: Request) {
           email: newUser.email,
           name: newUser.name,
         },
+        invitedBy: inviterId,
       },
       { status: 201 },
     )

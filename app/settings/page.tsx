@@ -10,14 +10,11 @@ import { Switch } from "@/components/ui/switch"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useToast } from "@/hooks/use-toast"
 import type { CalendarAccount } from "@/lib/types"
-import { Trash2, ArrowLeft, Check, X, Edit2 } from "lucide-react"
+import { Trash2, ArrowLeft, Check, X, Edit2, UserPlus } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { ColorPicker } from "@/components/color-picker"
-
-// Reemplazar la importación y el estado de preferencias con el hook
+import { InviteDialog } from "@/components/invite-dialog"
 import { usePreferences } from "@/hooks/use-preferences"
-
-// Importar el servicio de preferencias
 import type { UserPreferences } from "@/lib/preferences-storage"
 
 export default function SettingsPage() {
@@ -25,20 +22,16 @@ export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [editingName, setEditingName] = useState<string | null>(null)
   const [nameInput, setNameInput] = useState<string>("")
+  const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false)
   const { toast } = useToast()
   const router = useRouter()
-
-  // Eliminar el useState y useEffect para las preferencias
-  // Reemplazar con:
   const { preferences, updatePreference, resetPreferences } = usePreferences()
 
-  // Añadir useEffect para cargar las preferencias al montar el componente
   useEffect(() => {
     const loadAccounts = async () => {
       try {
         setIsLoading(true)
 
-        // Cargar cuentas desde la API
         const response = await fetch("/api/calendar-accounts")
 
         if (response.ok) {
@@ -62,7 +55,6 @@ export default function SettingsPage() {
     loadAccounts()
   }, [toast])
 
-  // Reemplazar la función handlePreferenceChange con:
   const handlePreferenceChange = <K extends keyof UserPreferences>(key: K, value: UserPreferences[K]) => {
     updatePreference(key, value)
 
@@ -73,7 +65,6 @@ export default function SettingsPage() {
     })
   }
 
-  // Modificar la función reconnectAccount para que sea más clara
   const reconnectAccount = (provider: "google" | "microsoft") => {
     toast({
       title: "Reconectando cuenta",
@@ -81,13 +72,11 @@ export default function SettingsPage() {
       variant: "default",
     })
 
-    // Pequeña pausa para que el usuario vea el toast
     setTimeout(() => {
       window.location.href = `/api/auth/${provider}`
     }, 1000)
   }
 
-  // Modificar la función removeAccount para que use la API
   const removeAccount = async (accountId: string, email: string) => {
     try {
       const response = await fetch(`/api/calendar-accounts/${accountId}`, {
@@ -116,7 +105,6 @@ export default function SettingsPage() {
     }
   }
 
-  // Nueva función para actualizar el color de una cuenta
   const updateAccountColor = async (accountId: string, color: string) => {
     try {
       const account = calendarAccounts.find((acc) => acc.id === accountId)
@@ -154,7 +142,6 @@ export default function SettingsPage() {
     }
   }
 
-  // Nueva función para actualizar el nombre de una cuenta
   const updateAccountName = async (accountId: string) => {
     try {
       const account = calendarAccounts.find((acc) => acc.id === accountId)
@@ -193,13 +180,11 @@ export default function SettingsPage() {
     }
   }
 
-  // Función para iniciar la edición del nombre
   const startEditingName = (accountId: string, currentName: string | undefined) => {
     setEditingName(accountId)
     setNameInput(currentName || "")
   }
 
-  // Función para cancelar la edición del nombre
   const cancelEditingName = () => {
     setEditingName(null)
     setNameInput("")
@@ -209,22 +194,18 @@ export default function SettingsPage() {
     window.location.href = "/"
   }
 
-  // Función para volver a la página principal
   const goBack = () => {
     router.push("/")
   }
 
-  // Agrupar cuentas por proveedor
   const googleAccounts = calendarAccounts.filter((account) => account.provider === "google")
   const microsoftAccounts = calendarAccounts.filter((account) => account.provider === "microsoft")
 
-  // Colores por defecto para cada proveedor
   const defaultColors = {
-    google: "#4285F4", // Azul de Google
-    microsoft: "#7B83EB", // Morado de Microsoft
+    google: "#4285F4",
+    microsoft: "#7B83EB",
   }
 
-  // Función para obtener el nombre a mostrar
   const getDisplayName = (account: CalendarAccount): string => {
     if (account.name) return account.name
     if (account.provider === "google") return "Google Calendar"
@@ -251,7 +232,13 @@ export default function SettingsPage() {
                 <CardTitle>Cuentas conectadas</CardTitle>
                 <CardDescription>Administra tus conexiones de calendario</CardDescription>
               </div>
-              <Button onClick={addNewCalendar}>Agregar calendario</Button>
+              <div className="flex gap-2">
+                <Button onClick={() => setIsInviteDialogOpen(true)} variant="outline">
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Invitar
+                </Button>
+                <Button onClick={addNewCalendar}>Agregar calendario</Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               {isLoading ? (
@@ -499,6 +486,8 @@ export default function SettingsPage() {
           </Card>
         </div>
       </div>
+
+      <InviteDialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen} />
     </div>
   )
 }
