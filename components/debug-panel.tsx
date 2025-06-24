@@ -3,60 +3,52 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { useToast } from "@/hooks/use-toast"
 
 export function DebugPanel() {
   const [debugInfo, setDebugInfo] = useState<any>(null)
   const [loading, setLoading] = useState(false)
-  const { toast } = useToast()
 
   const loadDebugInfo = async () => {
+    setLoading(true)
     try {
-      setLoading(true)
-      const response = await fetch("/api/debug/user-relations")
+      const response = await fetch("/api/debug/database-state")
       const data = await response.json()
       setDebugInfo(data)
+      console.log("Debug info:", data)
     } catch (error) {
       console.error("Error cargando debug info:", error)
-      toast({
-        title: "Error",
-        description: "No se pudo cargar la información de debug",
-        variant: "destructive",
-      })
     } finally {
       setLoading(false)
     }
   }
 
-  const fixRelations = async () => {
+  const forceFixRelations = async () => {
+    setLoading(true)
     try {
-      setLoading(true)
-      const response = await fetch("/api/debug/fix-relations", {
-        method: "POST",
-      })
+      const response = await fetch("/api/debug/force-fix", { method: "POST" })
       const data = await response.json()
-
-      if (data.success) {
-        toast({
-          title: "Éxito",
-          description: "Relaciones arregladas correctamente",
-        })
-        // Recargar la información
-        await loadDebugInfo()
-      } else {
-        toast({
-          title: "Error",
-          description: data.error || "Error al arreglar relaciones",
-          variant: "destructive",
-        })
-      }
+      console.log("Force fix result:", data)
+      alert(data.message || "Operación completada")
+      // Recargar info después del arreglo
+      await loadDebugInfo()
     } catch (error) {
-      console.error("Error arreglando relaciones:", error)
-      toast({
-        title: "Error",
-        description: "No se pudieron arreglar las relaciones",
-        variant: "destructive",
-      })
+      console.error("Error forzando arreglo:", error)
+      alert("Error al forzar arreglo")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const testSharedAccounts = async () => {
+    setLoading(true)
+    try {
+      const response = await fetch("/api/calendar-accounts/shared")
+      const data = await response.json()
+      console.log("Shared accounts test:", data)
+      alert(`Cuentas cargadas: ${data.accounts?.length || 0}`)
+    } catch (error) {
+      console.error("Error probando cuentas compartidas:", error)
+      alert("Error al probar cuentas compartidas")
     } finally {
       setLoading(false)
     }
@@ -71,32 +63,28 @@ export function DebugPanel() {
         <CardContent className="space-y-4">
           <div className="flex gap-2">
             <Button onClick={loadDebugInfo} disabled={loading}>
-              {loading ? "Cargando..." : "Cargar Info Debug"}
+              Ver Estado de BD
             </Button>
-            <Button onClick={fixRelations} disabled={loading} variant="destructive">
-              {loading ? "Arreglando..." : "Arreglar Relaciones"}
+            <Button onClick={forceFixRelations} disabled={loading} variant="destructive">
+              FORZAR Arreglo
+            </Button>
+            <Button onClick={testSharedAccounts} disabled={loading} variant="outline">
+              Probar Cuentas Compartidas
             </Button>
           </div>
 
           {debugInfo && (
             <div className="space-y-4">
               <div>
-                <h3 className="text-lg font-semibold mb-2">Usuario Actual:</h3>
-                <pre className="bg-gray-100 p-3 rounded text-sm overflow-auto">
-                  {JSON.stringify(debugInfo.currentUser, null, 2)}
+                <h3 className="font-bold">Usuarios:</h3>
+                <pre className="bg-gray-100 p-2 rounded text-sm overflow-auto">
+                  {JSON.stringify(debugInfo.users, null, 2)}
                 </pre>
               </div>
 
               <div>
-                <h3 className="text-lg font-semibold mb-2">Todos los Usuarios:</h3>
-                <pre className="bg-gray-100 p-3 rounded text-sm overflow-auto">
-                  {JSON.stringify(debugInfo.allUsers, null, 2)}
-                </pre>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-semibold mb-2">Invitaciones:</h3>
-                <pre className="bg-gray-100 p-3 rounded text-sm overflow-auto">
+                <h3 className="font-bold">Invitaciones:</h3>
+                <pre className="bg-gray-100 p-2 rounded text-sm overflow-auto">
                   {JSON.stringify(debugInfo.invitations, null, 2)}
                 </pre>
               </div>
