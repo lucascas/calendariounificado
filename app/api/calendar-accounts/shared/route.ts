@@ -1,108 +1,99 @@
 import { NextResponse } from "next/server"
-import { connectToDatabase } from "@/lib/db/mongodb"
-import { User } from "@/lib/db/models/user"
-import { verify } from "jsonwebtoken"
 import { cookies } from "next/headers"
+import { verify } from "jsonwebtoken"
+import { UserService } from "@/lib/db/services/user-service"
+import { authConfig } from "@/lib/auth-config"
 
-// Clave secreta para JWT
-const JWT_SECRET = process.env.JWT_SECRET || "calendario_unificado_secret_key"
-
-// Obtener el ID de usuario del token
-async function getUserIdFromToken(token: string): Promise<string | null> {
+export async function GET() {
   try {
-    const decoded = verify(token, JWT_SECRET) as { id: string }
-    return decoded.id
-  } catch (error) {
-    console.error("Error al verificar token:", error)
-    return null
-  }
-}
-
-// GET: Obtener todas las cuentas de calendario (propias y compartidas)
-export async function GET(request: Request) {
-  try {
-    // Obtener el token de la cookie
+    // Obtener el token de autenticación
     const cookieStore = cookies()
-    const token = cookieStore.get("auth_token")?.value
+    const authToken = cookieStore.get("auth_token")?.value
 
-    if (!token) {
+    if (!authToken) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 })
     }
 
-    // Obtener el ID de usuario del token
-    const userId = await getUserIdFromToken(token)
-    if (!userId) {
-      return NextResponse.json({ error: "Token inválido" }, { status: 401 })
-    }
+    // Verificar el token
+    const decoded = verify(authToken, authConfig.jwt.secret) as { id: string }
+    const userId = decoded.id
 
-    // Conectar a la base de datos
-    await connectToDatabase()
-
-    // Buscar el usuario actual
-    const currentUser = await User.findById(userId)
+    // Obtener el usuario actual
+    const currentUser = await UserService.getUserById(userId)
     if (!currentUser) {
       return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 })
     }
 
+    console.log(`Cargando cuentas para usuario: ${currentUser.email}`)
+    console.log(`Usuario invitado por: ${currentUser.invitedBy}`)
+    console.log(`Puede ver calendarios de: ${currentUser.sharedCalendars}`)
+
     const allAccounts = []
 
     // 1. Agregar las cuentas propias del usuario
-    const ownAccounts = (currentUser.calendarAccounts || []).map((account: any) => ({
+    const ownAccounts = currentUser.calendarAccounts.map((account: any) => ({
       ...account,
       isOwn: true,
-      canEdit: true,
+      ownerName: currentUser.name || currentUser.email,
+      ownerId: currentUser._id.toString(),
     }))
+
     allAccounts.push(...ownAccounts)
+    console.log(`Cuentas propias: ${ownAccounts.length}`)
 
-    // 2. Buscar usuarios que este usuario ha invitado (y que han aceptado)
-    const invitedUsers = await User.find({
-      invitedBy: userId,
-      isActive: true,
-    })
+    // 2. Agregar cuentas de usuarios que puede ver (usuarios que lo invitaron o que ha invitado)
+    const sharedCalendarUserIds = currentUser.sharedCalendars || []
 
-    for (const invitedUser of invitedUsers) {
-      const sharedAccounts = (invitedUser.calendarAccounts || []).map((account: any) => ({
-        ...account,
-        id: `shared_${invitedUser._id}_${account.id}`, // ID único para cuenta compartida
-        isOwn: false,
-        canEdit: false,
-        ownerName: invitedUser.name || invitedUser.username,
-        ownerEmail: invitedUser.email,
-        originalAccountId: account.id,
-        originalOwnerId: invitedUser._id.toString(),
-        name: account.name || `${invitedUser.name || invitedUser.username} - ${account.provider}`,
-      }))
-      allAccounts.push(...sharedAccounts)
-    }
+    for (const sharedUserId of sharedCalendarUserIds) {
+      try {
+        const sharedUser = await UserService.getUserById(sharedUserId)
+        if (sharedUser && sharedUser.calendarAccounts) {
+          const sharedAccounts = sharedUser.calendarAccounts.map((account: any) => ({
+            ...account,
+            isOwn: false,
+            ownerName: sharedUser.name || sharedUser.email,
+            ownerId: sharedUser._id.toString(),
+            // Cambiar el ID para evitar conflictos
+            id: `shared_${sharedUser._id}_${account.id}`,
+          }))
 
-    // 3. Si este usuario fue invitado por alguien, agregar las cuentas del invitador
-    if (currentUser.invitedBy) {
-      const inviterUser = await User.findById(currentUser.invitedBy)
-      if (inviterUser) {
-        const inviterAccounts = (inviterUser.calendarAccounts || []).map((account: any) => ({
-          ...account,
-          id: `shared_${inviterUser._id}_${account.id}`, // ID único para cuenta compartida
-          isOwn: false,
-          canEdit: false,
-          ownerName: inviterUser.name || inviterUser.username,
-          ownerEmail: inviterUser.email,
-          originalAccountId: account.id,
-          originalOwnerId: inviterUser._id.toString(),
-          name: account.name || `${inviterUser.name || inviterUser.username} - ${account.provider}`,
-        }))
-        allAccounts.push(...inviterAccounts)
+          allAccounts.push(...sharedAccounts)
+          console.log(`Cuentas compartidas de ${sharedUser.email}: ${sharedAccounts.length}`)
+        }
+      } catch (error) {
+        console.error(`Error al cargar cuentas compartidas del usuario ${sharedUserId}:`, error)
       }
     }
 
-    console.log(`Usuario ${currentUser.email} tiene acceso a ${allAccounts.length} cuentas de calendario`)
-    console.log(`- Propias: ${ownAccounts.length}`)
-    console.log(`- Compartidas: ${allAccounts.length - ownAccounts.length}`)
+    // 3. Agregar cuentas de usuarios que han sido invitados por este usuario
+    const invitedUsers = await UserService.getUsersInvitedBy(userId)
+    for (const invitedUser of invitedUsers) {
+      try {
+        if (invitedUser.calendarAccounts) {
+          const invitedAccounts = invitedUser.calendarAccounts.map((account: any) => ({
+            ...account,
+            isOwn: false,
+            ownerName: invitedUser.name || invitedUser.email,
+            ownerId: invitedUser._id.toString(),
+            // Cambiar el ID para evitar conflictos
+            id: `invited_${invitedUser._id}_${account.id}`,
+          }))
 
-    return NextResponse.json({
-      accounts: allAccounts,
-    })
+          allAccounts.push(...invitedAccounts)
+          console.log(`Cuentas de usuario invitado ${invitedUser.email}: ${invitedAccounts.length}`)
+        }
+      } catch (error) {
+        console.error(`Error al cargar cuentas del usuario invitado ${invitedUser._id}:`, error)
+      }
+    }
+
+    console.log(`Total de cuentas devueltas: ${allAccounts.length}`)
+    console.log(`Cuentas propias: ${allAccounts.filter((a) => a.isOwn).length}`)
+    console.log(`Cuentas compartidas: ${allAccounts.filter((a) => !a.isOwn).length}`)
+
+    return NextResponse.json({ accounts: allAccounts })
   } catch (error) {
-    console.error("Error al obtener cuentas de calendario compartidas:", error)
+    console.error("Error al obtener cuentas de calendario:", error)
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }

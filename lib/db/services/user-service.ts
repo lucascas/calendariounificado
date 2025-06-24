@@ -138,6 +138,12 @@ export const UserService = {
     return User.findOne({ email })
   },
 
+  // Obtener usuarios invitados por un usuario específico
+  async getUsersInvitedBy(userId: string): Promise<IUser[]> {
+    await connectToDatabase()
+    return User.find({ invitedBy: userId })
+  },
+
   // Añadir o actualizar una cuenta de calendario
   async addOrUpdateCalendarAccount(userId: string, account: CalendarAccount): Promise<IUser | null> {
     await connectToDatabase()

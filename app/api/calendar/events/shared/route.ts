@@ -1,121 +1,220 @@
 import { NextResponse } from "next/server"
-import { connectToDatabase } from "@/lib/db/mongodb"
-import { User } from "@/lib/db/models/user"
-import { verify } from "jsonwebtoken"
 import { cookies } from "next/headers"
+import { verify } from "jsonwebtoken"
+import { UserService } from "@/lib/db/services/user-service"
+import { authConfig } from "@/lib/auth-config"
 
-// Clave secreta para JWT
-const JWT_SECRET = process.env.JWT_SECRET || "calendario_unificado_secret_key"
-
-// Obtener el ID de usuario del token
-async function getUserIdFromToken(token: string): Promise<string | null> {
+// Función para obtener eventos de Google Calendar
+async function fetchGoogleEvents(accessToken: string, date: Date) {
   try {
-    const decoded = verify(token, JWT_SECRET) as { id: string }
-    return decoded.id
+    const startOfDay = new Date(date)
+    startOfDay.setHours(0, 0, 0, 0)
+
+    const endOfDay = new Date(date)
+    endOfDay.setHours(23, 59, 59, 999)
+
+    const timeMin = startOfDay.toISOString()
+    const timeMax = endOfDay.toISOString()
+
+    console.log(`Obteniendo eventos de Google para ${timeMin} - ${timeMax}`)
+
+    const response = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    )
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("Error de Google Calendar API:", response.status, errorText)
+      throw new Error(`Google Calendar API error: ${response.status}`)
+    }
+
+    const data = await response.json()
+    console.log(`Google Calendar devolvió ${data.items?.length || 0} eventos`)
+
+    if (!data.items) {
+      return []
+    }
+
+    return data.items.map((event: any) => ({
+      id: event.id,
+      title: event.summary || "Sin título",
+      start: event.start.dateTime || `${event.start.date}T00:00:00`,
+      end: event.end.dateTime || `${event.end.date}T23:59:59`,
+      location: event.location,
+      description: event.description,
+      responseStatus: event.attendees?.find((a: any) => a.self)?.responseStatus || "accepted",
+    }))
   } catch (error) {
-    console.error("Error al verificar token:", error)
-    return null
+    console.error("Error al obtener eventos de Google:", error)
+    throw error
   }
 }
 
-// POST: Obtener eventos de una cuenta (propia o compartida)
+// Función para obtener eventos de Microsoft Calendar
+async function fetchMicrosoftEvents(accessToken: string, date: Date) {
+  try {
+    const startOfDay = new Date(date)
+    startOfDay.setHours(0, 0, 0, 0)
+
+    const endOfDay = new Date(date)
+    endOfDay.setHours(23, 59, 59, 999)
+
+    const startDateTime = startOfDay.toISOString()
+    const endDateTime = endOfDay.toISOString()
+
+    console.log(`Obteniendo eventos de Microsoft para ${startDateTime} - ${endDateTime}`)
+
+    const response = await fetch(
+      `https://graph.microsoft.com/v1.0/me/calendarView?startDateTime=${startDateTime}&endDateTime=${endDateTime}&$orderby=start/dateTime`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Prefer: 'outlook.timezone="UTC"',
+        },
+      },
+    )
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("Error de Microsoft Graph API:", response.status, errorText)
+      throw new Error(`Microsoft Graph API error: ${response.status}`)
+    }
+
+    const data = await response.json()
+    console.log(`Microsoft Graph devolvió ${data.value?.length || 0} eventos`)
+
+    if (!data.value) {
+      return []
+    }
+
+    return data.value.map((event: any) => ({
+      id: event.id,
+      title: event.subject || "Sin título",
+      start: event.start.dateTime + "Z",
+      end: event.end.dateTime + "Z",
+      location: event.location?.displayName,
+      description: event.bodyPreview,
+      responseStatus:
+        event.attendees?.find((a: any) => a.emailAddress.address === event.organizer?.emailAddress?.address)?.status
+          ?.response || "accepted",
+    }))
+  } catch (error) {
+    console.error("Error al obtener eventos de Microsoft:", error)
+    throw error
+  }
+}
+
 export async function POST(request: Request) {
   try {
-    // Obtener el token de la cookie
+    // Obtener el token de autenticación
     const cookieStore = cookies()
-    const token = cookieStore.get("auth_token")?.value
+    const authToken = cookieStore.get("auth_token")?.value
 
-    if (!token) {
+    if (!authToken) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 })
     }
 
-    // Obtener el ID de usuario del token
-    const userId = await getUserIdFromToken(token)
-    if (!userId) {
-      return NextResponse.json({ error: "Token inválido" }, { status: 401 })
-    }
+    // Verificar el token
+    const decoded = verify(authToken, authConfig.jwt.secret) as { id: string }
+    const userId = decoded.id
 
+    // Obtener los datos de la solicitud
     const body = await request.json()
     const { accountId, date } = body
 
     if (!accountId || !date) {
-      return NextResponse.json({ error: "Faltan parámetros requeridos" }, { status: 400 })
+      return NextResponse.json({ error: "accountId y date son requeridos" }, { status: 400 })
     }
 
-    // Conectar a la base de datos
-    await connectToDatabase()
+    console.log(`Buscando cuenta ${accountId} para usuario ${userId}`)
 
-    // Buscar el usuario actual
-    const currentUser = await User.findById(userId)
+    let account = null
+    let accountOwner = null
+
+    // Verificar si es una cuenta propia
+    const currentUser = await UserService.getUserById(userId)
     if (!currentUser) {
       return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 })
     }
 
-    let targetUser = currentUser
-    let targetAccountId = accountId
+    // Buscar en las cuentas propias
+    account = currentUser.calendarAccounts.find((acc: any) => acc.id === accountId)
+    if (account) {
+      accountOwner = currentUser
+      console.log(`Cuenta encontrada en cuentas propias: ${account.email}`)
+    }
 
-    // Si es una cuenta compartida (empieza con "shared_")
-    if (accountId.startsWith("shared_")) {
-      const parts = accountId.split("_")
-      if (parts.length >= 3) {
-        const ownerId = parts[1]
-        targetAccountId = parts.slice(2).join("_")
-
-        // Verificar que el usuario actual tiene permisos para ver esta cuenta
-        const hasPermission =
-          currentUser.invitedBy?.toString() === ownerId || // El usuario fue invitado por el propietario
-          (await User.exists({ _id: ownerId, invitedBy: userId })) // El propietario fue invitado por el usuario actual
-
-        if (!hasPermission) {
-          return NextResponse.json({ error: "Sin permisos para acceder a esta cuenta" }, { status: 403 })
-        }
-
-        // Buscar el usuario propietario de la cuenta
-        targetUser = await User.findById(ownerId)
-        if (!targetUser) {
-          return NextResponse.json({ error: "Propietario de la cuenta no encontrado" }, { status: 404 })
+    // Si no se encontró, buscar en cuentas compartidas
+    if (!account) {
+      // Buscar en usuarios que puede ver (sharedCalendars)
+      const sharedCalendarUserIds = currentUser.sharedCalendars || []
+      for (const sharedUserId of sharedCalendarUserIds) {
+        const sharedUser = await UserService.getUserById(sharedUserId)
+        if (sharedUser) {
+          const sharedAccount = sharedUser.calendarAccounts.find(
+            (acc: any) => `shared_${sharedUser._id}_${acc.id}` === accountId,
+          )
+          if (sharedAccount) {
+            account = sharedAccount
+            accountOwner = sharedUser
+            console.log(`Cuenta encontrada en cuentas compartidas: ${account.email} (propietario: ${sharedUser.email})`)
+            break
+          }
         }
       }
     }
 
-    // Buscar la cuenta de calendario
-    const account = targetUser.calendarAccounts?.find((acc: any) => acc.id === targetAccountId)
+    // Si no se encontró, buscar en usuarios invitados
     if (!account) {
+      const invitedUsers = await UserService.getUsersInvitedBy(userId)
+      for (const invitedUser of invitedUsers) {
+        const invitedAccount = invitedUser.calendarAccounts.find(
+          (acc: any) => `invited_${invitedUser._id}_${acc.id}` === accountId,
+        )
+        if (invitedAccount) {
+          account = invitedAccount
+          accountOwner = invitedUser
+          console.log(`Cuenta encontrada en usuarios invitados: ${account.email} (propietario: ${invitedUser.email})`)
+          break
+        }
+      }
+    }
+
+    if (!account || !accountOwner) {
       return NextResponse.json({ error: "Cuenta de calendario no encontrada" }, { status: 404 })
     }
 
-    // Verificar que la cuenta tenga un token válido
-    if (!account.accessToken) {
-      return NextResponse.json({ error: "Cuenta sin token de acceso" }, { status: 401 })
+    // Verificar que el token no haya expirado
+    if (account.expiresAt && account.expiresAt < Date.now()) {
+      return NextResponse.json({ error: "Token expirado" }, { status: 401 })
     }
 
-    // Cargar eventos usando la API existente
-    const eventsResponse = await fetch(
-      `${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/api/calendar/events`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Cookie: `auth_token=${token}`, // Pasar el token para la autenticación
-        },
-        body: JSON.stringify({
-          accountId: targetAccountId,
-          date: date,
-          // Pasar información adicional para cuentas compartidas
-          targetUserId: targetUser._id.toString(),
-        }),
-      },
-    )
+    const eventDate = new Date(date)
+    let events = []
 
-    if (!eventsResponse.ok) {
-      const errorData = await eventsResponse.json()
-      return NextResponse.json(errorData, { status: eventsResponse.status })
+    // Obtener eventos según el proveedor
+    if (account.provider === "google") {
+      events = await fetchGoogleEvents(account.accessToken, eventDate)
+    } else if (account.provider === "microsoft") {
+      events = await fetchMicrosoftEvents(account.accessToken, eventDate)
+    } else {
+      return NextResponse.json({ error: "Proveedor no soportado" }, { status: 400 })
     }
 
-    const events = await eventsResponse.json()
+    console.log(`Devolviendo ${events.length} eventos para ${account.email}`)
     return NextResponse.json(events)
   } catch (error) {
-    console.error("Error al obtener eventos compartidos:", error)
+    console.error("Error al obtener eventos:", error)
+
+    if (error instanceof Error && error.message.includes("401")) {
+      return NextResponse.json({ error: "Token de acceso inválido o expirado" }, { status: 401 })
+    }
+
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
