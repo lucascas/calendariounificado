@@ -31,83 +31,96 @@ export function CalendarView({ calendarAccounts }: CalendarViewProps) {
     setDate(new Date())
   }, [])
 
-  // Función para generar eventos de ejemplo
-  const generateExampleEvents = (currentDate: Date): Event[] => {
-    const today = new Date(currentDate)
+  // Función para cargar eventos reales desde la API
+  const loadEvents = async (currentDate: Date) => {
+    setIsLoading(true)
+    setError(null)
+    setEvents([])
 
-    // Crear eventos de ejemplo para Google
-    const googleExampleEvents = [
-      {
-        id: "g1",
-        title: "Reunión de equipo",
-        start: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 9, 0),
-        end: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 10, 0),
-        location: "Google Meet",
-        description: "Reunión semanal de equipo",
-        provider: "google" as const,
-        accountEmail: "ejemplo@gmail.com",
-        responseStatus: "accepted",
-      },
-      {
-        id: "g2",
-        title: "Almuerzo con cliente",
-        start: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 13, 0),
-        end: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 14, 30),
-        location: "Restaurante Centro",
-        description: "Discutir propuesta de proyecto",
-        provider: "google" as const,
-        accountEmail: "ejemplo@gmail.com",
-        responseStatus: "accepted",
-      },
-      {
-        id: "g3",
-        title: "Revisión de proyecto",
-        start: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 16, 0),
-        end: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 17, 0),
-        description: "Revisar avances del sprint",
-        provider: "google" as const,
-        accountEmail: "ejemplo2@gmail.com",
-        responseStatus: "declined",
-      },
-    ]
+    try {
+      console.log("Cargando eventos reales para la fecha:", currentDate.toDateString())
+      console.log("Cuentas disponibles:", calendarAccounts.length)
 
-    // Crear eventos de ejemplo para Microsoft
-    const microsoftExampleEvents = [
-      {
-        id: "m1",
-        title: "Llamada con proveedor",
-        start: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 10, 30),
-        end: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 11, 30),
-        location: "Microsoft Teams",
-        description: "Discutir términos del contrato",
-        provider: "microsoft" as const,
-        accountEmail: "ejemplo@outlook.com",
-        responseStatus: "accepted",
-      },
-      {
-        id: "m2",
-        title: "Presentación de ventas",
-        start: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 14, 0),
-        end: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 15, 0),
-        location: "Sala de conferencias",
-        description: "Presentar nuevos productos",
-        provider: "microsoft" as const,
-        accountEmail: "ejemplo@outlook.com",
-        responseStatus: "tentative",
-      },
-      {
-        id: "m3",
-        title: "Capacitación",
-        start: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 17, 30),
-        end: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 19, 0),
-        description: "Capacitación sobre nuevas herramientas",
-        provider: "microsoft" as const,
-        accountEmail: "ejemplo@outlook.com",
-        responseStatus: "declined",
-      },
-    ]
+      if (calendarAccounts.length === 0) {
+        console.log("No hay cuentas de calendario configuradas")
+        setEvents([])
+        return
+      }
 
-    return [...googleExampleEvents, ...microsoftExampleEvents]
+      const allEvents: Event[] = []
+
+      // Cargar eventos para cada cuenta
+      for (const account of calendarAccounts) {
+        try {
+          console.log(`Cargando eventos para ${account.provider}: ${account.email}`)
+
+          const response = await fetch("/api/calendar/events", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              accountId: account.id,
+              date: currentDate.toISOString(),
+            }),
+          })
+
+          if (!response.ok) {
+            const errorData = await response.json()
+            console.error(`Error al cargar eventos para ${account.email}:`, errorData)
+
+            if (response.status === 401) {
+              toast({
+                title: "Token expirado",
+                description: `La cuenta ${account.email} necesita ser reconectada.`,
+                variant: "destructive",
+              })
+            }
+            continue
+          }
+
+          const accountEvents = await response.json()
+          console.log(`Eventos cargados para ${account.email}:`, accountEvents.length)
+
+          // Agregar información de la cuenta a cada evento
+          const eventsWithAccount = accountEvents.map((event: any) => ({
+            ...event,
+            accountEmail: account.email,
+            accountName: account.name,
+            provider: account.provider,
+            color: account.color,
+            start: new Date(event.start),
+            end: new Date(event.end),
+          }))
+
+          allEvents.push(...eventsWithAccount)
+        } catch (error) {
+          console.error(`Error al cargar eventos para ${account.email}:`, error)
+        }
+      }
+
+      console.log("Total de eventos cargados:", allEvents.length)
+      setEvents(allEvents)
+
+      if (allEvents.length === 0) {
+        toast({
+          title: "Sin eventos",
+          description: "No se encontraron eventos para esta fecha.",
+          variant: "default",
+        })
+      }
+    } catch (error) {
+      console.error("Error general al cargar eventos:", error)
+      const errorMessage = error instanceof Error ? error.message : "Error desconocido"
+      setError(`Error al cargar los eventos: ${errorMessage}`)
+      toast({
+        title: "Error al cargar eventos",
+        description: "No se pudieron cargar los eventos del calendario.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   // Función para navegar al día anterior
@@ -138,47 +151,16 @@ export function CalendarView({ calendarAccounts }: CalendarViewProps) {
     setIsRefreshing(true)
     setError(null)
 
-    // Recargar los eventos
     loadEvents(date).finally(() => {
       setIsRefreshing(false)
     })
   }
 
-  // Función para cargar eventos
-  const loadEvents = async (currentDate: Date) => {
-    setIsLoading(true)
-    setError(null)
-    setEvents([])
-
-    try {
-      console.log("Cargando eventos para la fecha:", currentDate.toDateString())
-      console.log("Cuentas disponibles:", calendarAccounts.length)
-
-      // Generar eventos de ejemplo para demostración
-      const exampleEvents = generateExampleEvents(currentDate)
-      setEvents(exampleEvents)
-
-      // Simular un pequeño retraso para mostrar el estado de carga
-      await new Promise((resolve) => setTimeout(resolve, 500))
-    } catch (error) {
-      console.error("General error loading events:", error)
-      const errorMessage = error instanceof Error ? error.message : "Error desconocido"
-      setError(`Error al cargar los eventos: ${errorMessage}`)
-      toast({
-        title: "Error al cargar eventos",
-        description: "No se pudieron cargar los eventos del calendario.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Cargar eventos cuando cambia la fecha
+  // Cargar eventos cuando cambia la fecha o las cuentas
   useEffect(() => {
-    if (!date) return
+    if (!date || calendarAccounts.length === 0) return
     loadEvents(date)
-  }, [date])
+  }, [date, calendarAccounts])
 
   // Si la fecha aún no está inicializada, mostrar un estado de carga
   if (!date) {
@@ -198,7 +180,7 @@ export function CalendarView({ calendarAccounts }: CalendarViewProps) {
     )
   }
 
-  // Filtrar eventos rechazados, pero solo si tienen explícitamente responseStatus="declined"
+  // Filtrar eventos rechazados
   const filteredEvents = events.filter((event) => event.responseStatus !== "declined")
 
   // Separar eventos por proveedor
@@ -227,7 +209,6 @@ export function CalendarView({ calendarAccounts }: CalendarViewProps) {
           </Button>
         </CardHeader>
 
-        {/* Añadir el componente MealPlanDisplay aquí, entre el CardHeader y el CardContent */}
         {date && <MealPlanDisplay date={date} />}
 
         <CardContent>
@@ -236,6 +217,15 @@ export function CalendarView({ calendarAccounts }: CalendarViewProps) {
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Error</AlertTitle>
               <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          {calendarAccounts.length === 0 && (
+            <Alert className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                No hay cuentas de calendario conectadas. Conecta al menos una cuenta para ver tus eventos.
+              </AlertDescription>
             </Alert>
           )}
 

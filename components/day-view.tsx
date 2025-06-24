@@ -7,8 +7,6 @@ import { AlertCircle, Clock } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import type { Event } from "@/lib/types"
-
-// Reemplazar la importación del servicio de preferencias con el hook
 import { usePreferences } from "@/hooks/use-preferences"
 
 interface DayViewProps {
@@ -27,28 +25,21 @@ export function DayView({ googleEvents, microsoftEvents, date, isLoading }: DayV
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
   const allEvents = [...googleEvents, ...microsoftEvents]
   const hasEvents = allEvents.length > 0
-
-  // Añadir dentro del componente DayView:
   const { preferences } = usePreferences()
 
-  // Modificar la función useEffect que crea los slots de tiempo
   useEffect(() => {
-    // Obtener las preferencias del hook
     const { startHour, endHour } = preferences
 
-    // Convertir las horas de formato "HH:MM" a números
     const startHourParts = startHour.split(":")
     const endHourParts = endHour.split(":")
 
     const startHourNum = Number.parseInt(startHourParts[0], 10)
     const endHourNum = Number.parseInt(endHourParts[0], 10)
 
-    // Crear slots de tiempo para cada 30 minutos desde la hora de inicio hasta la hora de fin
     const slots: TimeSlot[] = []
 
     for (let hour = startHourNum; hour <= endHourNum; hour++) {
       for (const minute of [0, 30]) {
-        // Si es la última hora y ya pasamos los minutos de fin, no añadir más slots
         if (hour === endHourNum && minute > Number.parseInt(endHourParts[1], 10)) {
           continue
         }
@@ -75,13 +66,11 @@ export function DayView({ googleEvents, microsoftEvents, date, isLoading }: DayV
     })
   }
 
-  // Función para obtener el color del evento basado en el proveedor o color personalizado
   function getEventColor(event: Event): string {
     if (event.color) return event.color
     return event.provider === "google" ? "#4285F4" : "#7B83EB"
   }
 
-  // Función para calcular la duración del evento
   function getEventDuration(start: Date, end: Date): string {
     const durationMs = end.getTime() - start.getTime()
     const durationMinutes = Math.floor(durationMs / 60000)
