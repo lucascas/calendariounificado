@@ -7,7 +7,14 @@ export interface CalendarAccount {
   expiresAt?: number
   simulated?: boolean
   color?: string
-  name?: string // Nuevo campo para el nombre personalizado
+  name?: string // Nombre personalizado
+  // Nuevos campos para cuentas compartidas
+  ownerName?: string // Nombre del propietario (para cuentas compartidas)
+  ownerEmail?: string // Email del propietario (para cuentas compartidas)
+  isOwn?: boolean // Si es cuenta propia o compartida
+  canEdit?: boolean // Si se puede editar la cuenta
+  originalAccountId?: string // ID original de la cuenta (para compartidas)
+  originalOwnerId?: string // ID del propietario original (para compartidas)
 }
 
 export interface Event {
@@ -21,6 +28,9 @@ export interface Event {
   provider?: "google" | "microsoft"
   accountEmail?: string
   color?: string
-  accountName?: string // Nuevo campo para el nombre personalizado de la cuenta
+  accountName?: string // Nombre personalizado de la cuenta
   responseStatus?: "accepted" | "declined" | "tentative" | "needsAction" | string
+  // Nuevos campos para eventos compartidos
+  isShared?: boolean // Si el evento viene de una cuenta compartida
+  ownerName?: string // Nombre del propietario del calendario (para eventos compartidos)
 }

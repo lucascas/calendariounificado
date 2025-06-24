@@ -33,7 +33,7 @@ export function ClientCalendarApp() {
         console.log("Usuario autenticado:", authData.user.email)
         setIsAuthenticated(true)
 
-        // Cargar cuentas de calendario desde la API
+        // Cargar cuentas de calendario (propias y compartidas) desde la nueva API
         await loadCalendarAccounts()
       } else {
         console.log("Usuario no autenticado")
@@ -51,22 +51,38 @@ export function ClientCalendarApp() {
 
   const loadCalendarAccounts = async () => {
     try {
-      console.log("Cargando cuentas de calendario desde la API...")
+      console.log("Cargando cuentas de calendario (propias y compartidas) desde la API...")
 
-      const response = await fetch("/api/calendar-accounts")
+      // Usar la nueva API que incluye cuentas compartidas
+      const response = await fetch("/api/calendar-accounts/shared")
 
       if (response.ok) {
         const data = await response.json()
         const accounts = data.accounts || []
 
         console.log("Cuentas cargadas desde la API:", accounts.length)
+        console.log("Cuentas propias:", accounts.filter((a: any) => a.isOwn).length)
+        console.log("Cuentas compartidas:", accounts.filter((a: any) => !a.isOwn).length)
+
         setCalendarAccounts(accounts)
-        setNeedsCalendarSetup(accounts.length === 0)
+
+        // Solo necesita configuración si no tiene cuentas propias
+        const ownAccounts = accounts.filter((a: any) => a.isOwn)
+        setNeedsCalendarSetup(ownAccounts.length === 0)
 
         if (accounts.length > 0) {
+          const ownCount = accounts.filter((a: any) => a.isOwn).length
+          const sharedCount = accounts.filter((a: any) => !a.isOwn).length
+
+          let description = `Se cargaron ${ownCount} cuenta(s) propia(s)`
+          if (sharedCount > 0) {
+            description += ` y ${sharedCount} cuenta(s) compartida(s)`
+          }
+          description += "."
+
           toast({
             title: "Calendarios cargados",
-            description: `Se cargaron ${accounts.length} cuenta(s) de calendario.`,
+            description,
             variant: "default",
           })
         }
@@ -118,7 +134,7 @@ export function ClientCalendarApp() {
     return <LoginForm onLoginSuccess={handleLoginSuccess} />
   }
 
-  // Si no hay cuentas configuradas, mostrar configuración
+  // Si no hay cuentas propias configuradas, mostrar configuración
   if (needsCalendarSetup) {
     return <AccountSetup onSetupComplete={handleCalendarSetup} />
   }

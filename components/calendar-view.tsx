@@ -7,7 +7,7 @@ import { EventList } from "@/components/event-list"
 import { DayView } from "@/components/day-view"
 import { useToast } from "@/hooks/use-toast"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { AlertCircle, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react"
+import { AlertCircle, RefreshCw, ChevronLeft, ChevronRight, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { CalendarAccount, Event } from "@/lib/types"
 import { format, addDays, subDays } from "date-fns"
@@ -31,14 +31,14 @@ export function CalendarView({ calendarAccounts }: CalendarViewProps) {
     setDate(new Date())
   }, [])
 
-  // Función para cargar eventos reales desde la API
+  // Función para cargar eventos desde la nueva API compartida
   const loadEvents = async (currentDate: Date) => {
     setIsLoading(true)
     setError(null)
     setEvents([])
 
     try {
-      console.log("Cargando eventos reales para la fecha:", currentDate.toDateString())
+      console.log("Cargando eventos (propios y compartidos) para la fecha:", currentDate.toDateString())
       console.log("Cuentas disponibles:", calendarAccounts.length)
 
       if (calendarAccounts.length === 0) {
@@ -49,12 +49,15 @@ export function CalendarView({ calendarAccounts }: CalendarViewProps) {
 
       const allEvents: Event[] = []
 
-      // Cargar eventos para cada cuenta
+      // Cargar eventos para cada cuenta (propias y compartidas)
       for (const account of calendarAccounts) {
         try {
-          console.log(`Cargando eventos para ${account.provider}: ${account.email}`)
+          console.log(
+            `Cargando eventos para ${account.provider}: ${account.email} (${account.isOwn ? "propia" : "compartida"})`,
+          )
 
-          const response = await fetch("/api/calendar/events", {
+          // Usar la nueva API que maneja cuentas compartidas
+          const response = await fetch("/api/calendar/events/shared", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -75,6 +78,12 @@ export function CalendarView({ calendarAccounts }: CalendarViewProps) {
                 description: `La cuenta ${account.email} necesita ser reconectada.`,
                 variant: "destructive",
               })
+            } else if (response.status === 403) {
+              toast({
+                title: "Sin permisos",
+                description: `No tienes permisos para ver la cuenta ${account.email}.`,
+                variant: "destructive",
+              })
             }
             continue
           }
@@ -86,11 +95,13 @@ export function CalendarView({ calendarAccounts }: CalendarViewProps) {
           const eventsWithAccount = accountEvents.map((event: any) => ({
             ...event,
             accountEmail: account.email,
-            accountName: account.name,
+            accountName: account.name || (account.isOwn ? undefined : `${account.ownerName} - ${account.provider}`),
             provider: account.provider,
             color: account.color,
             start: new Date(event.start),
             end: new Date(event.end),
+            isShared: !account.isOwn,
+            ownerName: account.ownerName,
           }))
 
           allEvents.push(...eventsWithAccount)
@@ -108,6 +119,17 @@ export function CalendarView({ calendarAccounts }: CalendarViewProps) {
           description: "No se encontraron eventos para esta fecha.",
           variant: "default",
         })
+      } else {
+        const ownEvents = allEvents.filter((e) => !e.isShared).length
+        const sharedEvents = allEvents.filter((e) => e.isShared).length
+
+        if (sharedEvents > 0) {
+          toast({
+            title: "Eventos cargados",
+            description: `${ownEvents} eventos propios y ${sharedEvents} eventos compartidos.`,
+            variant: "default",
+          })
+        }
       }
     } catch (error) {
       console.error("Error general al cargar eventos:", error)
@@ -183,9 +205,16 @@ export function CalendarView({ calendarAccounts }: CalendarViewProps) {
   // Filtrar eventos rechazados
   const filteredEvents = events.filter((event) => event.responseStatus !== "declined")
 
-  // Separar eventos por proveedor
-  const googleEvents = filteredEvents.filter((event) => event.provider === "google")
-  const microsoftEvents = filteredEvents.filter((event) => event.provider === "microsoft")
+  // Separar eventos por proveedor y tipo
+  const ownGoogleEvents = filteredEvents.filter((event) => event.provider === "google" && !event.isShared)
+  const ownMicrosoftEvents = filteredEvents.filter((event) => event.provider === "microsoft" && !event.isShared)
+  const sharedGoogleEvents = filteredEvents.filter((event) => event.provider === "google" && event.isShared)
+  const sharedMicrosoftEvents = filteredEvents.filter((event) => event.provider === "microsoft" && event.isShared)
+
+  const allGoogleEvents = [...ownGoogleEvents, ...sharedGoogleEvents]
+  const allMicrosoftEvents = [...ownMicrosoftEvents, ...sharedMicrosoftEvents]
+
+  const hasSharedEvents = sharedGoogleEvents.length > 0 || sharedMicrosoftEvents.length > 0
 
   return (
     <div className="container mx-auto p-4">
@@ -202,7 +231,15 @@ export function CalendarView({ calendarAccounts }: CalendarViewProps) {
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
-          <CardTitle>{date && format(date, "EEEE, d 'de' MMMM", { locale: es })}</CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle>{date && format(date, "EEEE, d 'de' MMMM", { locale: es })}</CardTitle>
+            {hasSharedEvents && (
+              <div className="flex items-center text-sm text-muted-foreground">
+                <Users className="h-4 w-4 mr-1" />
+                Calendarios compartidos
+              </div>
+            )}
+          </div>
           <Button variant="outline" size="sm" onClick={refreshEvents} disabled={isRefreshing}>
             <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
             {isRefreshing ? "Actualizando..." : "Actualizar"}
@@ -229,6 +266,16 @@ export function CalendarView({ calendarAccounts }: CalendarViewProps) {
             </Alert>
           )}
 
+          {hasSharedEvents && (
+            <Alert className="mb-4">
+              <Users className="h-4 w-4" />
+              <AlertDescription>
+                Estás viendo eventos de calendarios compartidos contigo. Los eventos compartidos aparecen marcados con
+                el nombre del propietario.
+              </AlertDescription>
+            </Alert>
+          )}
+
           <Tabs defaultValue="day">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="day">Vista de día</TabsTrigger>
@@ -236,14 +283,14 @@ export function CalendarView({ calendarAccounts }: CalendarViewProps) {
             </TabsList>
             <TabsContent value="day">
               <DayView
-                googleEvents={googleEvents}
-                microsoftEvents={microsoftEvents}
+                googleEvents={allGoogleEvents}
+                microsoftEvents={allMicrosoftEvents}
                 date={date}
                 isLoading={isLoading}
               />
             </TabsContent>
             <TabsContent value="list">
-              <EventList googleEvents={googleEvents} microsoftEvents={microsoftEvents} isLoading={isLoading} />
+              <EventList googleEvents={allGoogleEvents} microsoftEvents={allMicrosoftEvents} isLoading={isLoading} />
             </TabsContent>
           </Tabs>
         </CardContent>

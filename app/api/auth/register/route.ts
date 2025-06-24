@@ -59,15 +59,26 @@ export async function POST(request: Request) {
       name,
       calendarAccounts: [],
       invitedBy: inviterId, // Asociar con el usuario que invitó
+      sharedCalendars: inviterId ? [inviterId] : [], // Puede ver los calendarios del invitador
+      allowedViewers: [], // Inicialmente nadie puede ver sus calendarios
     })
 
     await newUser.save()
 
-    // Si había una invitación, marcarla como aceptada
-    if (invitation) {
+    // Si había una invitación, marcarla como aceptada Y actualizar permisos del invitador
+    if (invitation && inviterId) {
       invitation.status = "accepted"
       invitation.acceptedAt = new Date()
       await invitation.save()
+
+      // Permitir que el invitador vea los calendarios del nuevo usuario
+      await User.findByIdAndUpdate(inviterId, {
+        $addToSet: { allowedViewers: newUser._id.toString() },
+      })
+
+      console.log(`Usuario ${newUser.email} registrado e invitado por ${inviterId}`)
+      console.log(`${newUser.email} puede ver calendarios de: [${inviterId}]`)
+      console.log(`${inviterId} puede ver calendarios de: [${newUser._id}]`)
     }
 
     return NextResponse.json(

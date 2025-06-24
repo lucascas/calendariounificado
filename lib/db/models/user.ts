@@ -15,6 +15,8 @@ export interface IUser extends Document {
   lastLogin?: Date
   calendarAccounts: CalendarAccount[]
   invitedBy?: string // ID del usuario que invitó a este usuario
+  sharedCalendars?: string[] // IDs de usuarios cuyos calendarios puede ver
+  allowedViewers?: string[] // IDs de usuarios que pueden ver mis calendarios
 }
 
 // Esquema de usuario
@@ -34,6 +36,8 @@ const UserSchema: Schema = new Schema(
     lastLogin: { type: Date },
     calendarAccounts: [CalendarAccountSchema],
     invitedBy: { type: String }, // ID del usuario que invitó
+    sharedCalendars: [{ type: String }], // Calendarios que puedo ver
+    allowedViewers: [{ type: String }], // Usuarios que pueden ver mis calendarios
   },
   { timestamps: true },
 )
@@ -43,6 +47,8 @@ UserSchema.index({ email: 1 })
 UserSchema.index({ providerId: 1 })
 UserSchema.index({ username: 1 })
 UserSchema.index({ invitedBy: 1 })
+UserSchema.index({ sharedCalendars: 1 })
+UserSchema.index({ allowedViewers: 1 })
 
 // Crear el modelo si no existe
 export const User = mongoose.models.User || mongoose.model<IUser>("User", UserSchema)
