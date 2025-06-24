@@ -15,7 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertCircle, Mail, CheckCircle } from "lucide-react"
+import { AlertCircle, Mail, CheckCircle, Copy, ExternalLink } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 interface InviteDialogProps {
@@ -28,6 +28,7 @@ export function InviteDialog({ open, onOpenChange }: InviteDialogProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [invitationUrl, setInvitationUrl] = useState<string>("")
   const { toast } = useToast()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -57,18 +58,20 @@ export function InviteDialog({ open, onOpenChange }: InviteDialogProps) {
       }
 
       setSuccess(true)
+      setInvitationUrl(data.invitationUrl)
       toast({
         title: "Invitación enviada",
         description: `Se ha enviado una invitación a ${email}`,
         variant: "default",
       })
 
-      // Limpiar el formulario después de 2 segundos
+      // Limpiar el formulario después de 10 segundos (más tiempo para ver el link)
       setTimeout(() => {
         setEmail("")
         setSuccess(false)
+        setInvitationUrl("")
         onOpenChange(false)
-      }, 2000)
+      }, 10000)
     } catch (error) {
       console.error("Error al enviar invitación:", error)
       setError(error instanceof Error ? error.message : "Error al enviar la invitación")
@@ -77,10 +80,33 @@ export function InviteDialog({ open, onOpenChange }: InviteDialogProps) {
     }
   }
 
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(invitationUrl)
+      toast({
+        title: "Link copiado",
+        description: "El link de invitación ha sido copiado al portapapeles",
+        variant: "default",
+      })
+    } catch (error) {
+      console.error("Error al copiar:", error)
+      toast({
+        title: "Error",
+        description: "No se pudo copiar el link",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const openInNewTab = () => {
+    window.open(invitationUrl, "_blank")
+  }
+
   const handleClose = () => {
     setEmail("")
     setError(null)
     setSuccess(false)
+    setInvitationUrl("")
     onOpenChange(false)
   }
 
@@ -98,12 +124,42 @@ export function InviteDialog({ open, onOpenChange }: InviteDialogProps) {
         </DialogHeader>
 
         {success ? (
-          <div className="flex flex-col items-center justify-center py-6">
-            <CheckCircle className="h-12 w-12 text-green-500 mb-4" />
-            <p className="text-lg font-medium text-center">¡Invitación enviada!</p>
-            <p className="text-sm text-muted-foreground text-center">
-              El usuario recibirá un email con las instrucciones para registrarse
-            </p>
+          <div className="space-y-4">
+            <div className="flex flex-col items-center justify-center py-4">
+              <CheckCircle className="h-12 w-12 text-green-500 mb-4" />
+              <p className="text-lg font-medium text-center">¡Invitación enviada!</p>
+              <p className="text-sm text-muted-foreground text-center">
+                El usuario recibirá un email con las instrucciones para registrarse
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <Label htmlFor="invitation-link" className="text-sm font-medium">
+                Link de invitación generado:
+              </Label>
+              <div className="flex items-center space-x-2">
+                <Input
+                  id="invitation-link"
+                  value={invitationUrl}
+                  readOnly
+                  className="text-xs"
+                  onClick={(e) => e.currentTarget.select()}
+                />
+                <Button size="icon" variant="outline" onClick={copyToClipboard} title="Copiar link">
+                  <Copy className="h-4 w-4" />
+                </Button>
+                <Button size="icon" variant="outline" onClick={openInNewTab} title="Abrir en nueva pestaña">
+                  <ExternalLink className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                También puedes compartir este link directamente con la persona que quieres invitar
+              </p>
+            </div>
+
+            <div className="flex justify-end">
+              <Button onClick={handleClose}>Cerrar</Button>
+            </div>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">

@@ -73,10 +73,11 @@ export async function POST(request: Request) {
 
     await invitation.save()
 
-    // Enviar el email de invitación
+    // Construir la URL de invitación
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `${new URL(request.url).protocol}//${new URL(request.url).host}`
     const invitationUrl = `${baseUrl}/register?invitation=${invitationToken}`
 
+    // Enviar el email de invitación
     await sendInvitationEmail({
       to: email,
       inviterName: inviter.name || inviter.username,
@@ -87,6 +88,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       message: "Invitación enviada correctamente",
+      invitationUrl, // Devolver la URL para mostrarla en el frontend
     })
   } catch (error) {
     console.error("Error al enviar invitación:", error)
