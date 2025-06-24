@@ -17,6 +17,14 @@ import { InviteDialog } from "@/components/invite-dialog"
 import { InvitationsSection } from "@/components/invitations-section"
 import { usePreferences } from "@/hooks/use-preferences"
 import type { UserPreferences } from "@/lib/preferences-storage"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu"
+import { MoreVertical, RefreshCw, FolderSyncIcon as Sync, AlertTriangle, CheckCircle } from "lucide-react"
 
 export default function SettingsPage() {
   const [calendarAccounts, setCalendarAccounts] = useState<CalendarAccount[]>([])
@@ -220,6 +228,85 @@ export default function SettingsPage() {
     return "Microsoft Calendar"
   }
 
+  const refreshToken = async (accountId: string, email: string) => {
+    try {
+      const response = await fetch(`/api/tokens/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId }),
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Token actualizado",
+          description: `Token de ${email} actualizado correctamente.`,
+          variant: "default",
+        })
+        // Recargar cuentas
+        window.location.reload()
+      } else {
+        throw new Error("Error al actualizar token")
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "No se pudo actualizar el token.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const syncCalendar = async (accountId: string, email: string) => {
+    try {
+      const response = await fetch(`/api/calendar/sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId }),
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Calendario sincronizado",
+          description: `Calendario de ${email} sincronizado correctamente.`,
+          variant: "default",
+        })
+      } else {
+        throw new Error("Error al sincronizar")
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "No se pudo sincronizar el calendario.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const checkTokenStatus = async (accountId: string, email: string) => {
+    try {
+      const response = await fetch(`/api/tokens/check`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        toast({
+          title: "Estado del token",
+          description: `Token de ${email}: ${data.valid ? "Válido" : "Inválido"}. Expira: ${data.expiresIn || "Desconocido"}`,
+          variant: data.valid ? "default" : "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "No se pudo verificar el estado del token.",
+        variant: "destructive",
+      })
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <CalendarHeader calendarAccounts={calendarAccounts} />
@@ -305,21 +392,39 @@ export default function SettingsPage() {
                                 <p className="text-sm text-muted-foreground">{account.email}</p>
                               </div>
                             </div>
-                            <div className="flex gap-2">
-                              <Button
-                                variant={account.accessToken ? "outline" : "default"}
-                                onClick={() => reconnectAccount("google")}
-                              >
-                                {account.accessToken ? "Reconectar" : "Reparar conexión"}
-                              </Button>
-                              <Button
-                                variant="destructive"
-                                size="icon"
-                                onClick={() => removeAccount(account.id, account.email)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="icon">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => checkTokenStatus(account.id, account.email)}>
+                                  <CheckCircle className="mr-2 h-4 w-4" />
+                                  Verificar estado
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => refreshToken(account.id, account.email)}>
+                                  <RefreshCw className="mr-2 h-4 w-4" />
+                                  Refrescar token
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => syncCalendar(account.id, account.email)}>
+                                  <Sync className="mr-2 h-4 w-4" />
+                                  Sincronizar
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => reconnectAccount(account.provider)}>
+                                  <AlertTriangle className="mr-2 h-4 w-4" />
+                                  Reconectar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => removeAccount(account.id, account.email)}
+                                  className="text-destructive"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Eliminar
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                           <div className="text-xs text-muted-foreground">
                             {account.simulated
@@ -411,21 +516,39 @@ export default function SettingsPage() {
                                 <p className="text-sm text-muted-foreground">{account.email}</p>
                               </div>
                             </div>
-                            <div className="flex gap-2">
-                              <Button
-                                variant={account.accessToken ? "outline" : "default"}
-                                onClick={() => reconnectAccount("microsoft")}
-                              >
-                                {account.accessToken ? "Reconectar" : "Reparar conexión"}
-                              </Button>
-                              <Button
-                                variant="destructive"
-                                size="icon"
-                                onClick={() => removeAccount(account.id, account.email)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="icon">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => checkTokenStatus(account.id, account.email)}>
+                                  <CheckCircle className="mr-2 h-4 w-4" />
+                                  Verificar estado
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => refreshToken(account.id, account.email)}>
+                                  <RefreshCw className="mr-2 h-4 w-4" />
+                                  Refrescar token
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => syncCalendar(account.id, account.email)}>
+                                  <Sync className="mr-2 h-4 w-4" />
+                                  Sincronizar
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => reconnectAccount(account.provider)}>
+                                  <AlertTriangle className="mr-2 h-4 w-4" />
+                                  Reconectar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => removeAccount(account.id, account.email)}
+                                  className="text-destructive"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Eliminar
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                           <div className="text-xs text-muted-foreground">
                             {account.simulated
