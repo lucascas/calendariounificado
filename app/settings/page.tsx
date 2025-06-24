@@ -33,10 +33,14 @@ export default function SettingsPage() {
       try {
         setIsLoading(true)
 
-        const response = await fetch("/api/calendar-accounts")
+        const response = await fetch("/api/calendar-accounts/shared")
 
         if (response.ok) {
           const data = await response.json()
+          console.log("🔍 Datos recibidos en settings:", data)
+          console.log("🔍 Cuentas totales:", data.accounts?.length)
+          console.log("🔍 Cuentas propias:", data.accounts?.filter((acc) => acc.isOwn)?.length)
+          console.log("🔍 Cuentas compartidas:", data.accounts?.filter((acc) => !acc.isOwn)?.length)
           setCalendarAccounts(data.accounts || [])
         } else {
           throw new Error("Error al cargar cuentas de calendario")
