@@ -10,21 +10,13 @@ import { Switch } from "@/components/ui/switch"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useToast } from "@/hooks/use-toast"
 import type { CalendarAccount } from "@/lib/types"
-import { Trash2, ArrowLeft, Check, X, Edit2, UserPlus } from "lucide-react"
+import { Trash2, ArrowLeft, Check, X, Edit2, UserPlus, RefreshCw, AlertTriangle, CheckCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { ColorPicker } from "@/components/color-picker"
 import { InviteDialog } from "@/components/invite-dialog"
 import { InvitationsSection } from "@/components/invitations-section"
 import { usePreferences } from "@/hooks/use-preferences"
 import type { UserPreferences } from "@/lib/preferences-storage"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu"
-import { MoreVertical, RefreshCw, FolderSyncIcon as Sync, AlertTriangle, CheckCircle } from "lucide-react"
 
 export default function SettingsPage() {
   const [calendarAccounts, setCalendarAccounts] = useState<CalendarAccount[]>([])
@@ -392,39 +384,40 @@ export default function SettingsPage() {
                                 <p className="text-sm text-muted-foreground">{account.email}</p>
                               </div>
                             </div>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="icon">
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => checkTokenStatus(account.id, account.email)}>
-                                  <CheckCircle className="mr-2 h-4 w-4" />
-                                  Verificar estado
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => refreshToken(account.id, account.email)}>
-                                  <RefreshCw className="mr-2 h-4 w-4" />
-                                  Refrescar token
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => syncCalendar(account.id, account.email)}>
-                                  <Sync className="mr-2 h-4 w-4" />
-                                  Sincronizar
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => reconnectAccount(account.provider)}>
-                                  <AlertTriangle className="mr-2 h-4 w-4" />
-                                  Reconectar
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => removeAccount(account.id, account.email)}
-                                  className="text-destructive"
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Eliminar
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => checkTokenStatus(account.id, account.email)}
+                                title="Verificar estado"
+                              >
+                                <CheckCircle className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => refreshToken(account.id, account.email)}
+                                title="Refrescar token"
+                              >
+                                <RefreshCw className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => reconnectAccount(account.provider)}
+                                title="Reconectar"
+                              >
+                                <AlertTriangle className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => removeAccount(account.id, account.email)}
+                                title="Eliminar"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </div>
                           <div className="text-xs text-muted-foreground">
                             {account.simulated
@@ -516,39 +509,40 @@ export default function SettingsPage() {
                                 <p className="text-sm text-muted-foreground">{account.email}</p>
                               </div>
                             </div>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="icon">
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => checkTokenStatus(account.id, account.email)}>
-                                  <CheckCircle className="mr-2 h-4 w-4" />
-                                  Verificar estado
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => refreshToken(account.id, account.email)}>
-                                  <RefreshCw className="mr-2 h-4 w-4" />
-                                  Refrescar token
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => syncCalendar(account.id, account.email)}>
-                                  <Sync className="mr-2 h-4 w-4" />
-                                  Sincronizar
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => reconnectAccount(account.provider)}>
-                                  <AlertTriangle className="mr-2 h-4 w-4" />
-                                  Reconectar
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => removeAccount(account.id, account.email)}
-                                  className="text-destructive"
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Eliminar
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => checkTokenStatus(account.id, account.email)}
+                                title="Verificar estado"
+                              >
+                                <CheckCircle className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => refreshToken(account.id, account.email)}
+                                title="Refrescar token"
+                              >
+                                <RefreshCw className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => reconnectAccount(account.provider)}
+                                title="Reconectar"
+                              >
+                                <AlertTriangle className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => removeAccount(account.id, account.email)}
+                                title="Eliminar"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </div>
                           <div className="text-xs text-muted-foreground">
                             {account.simulated
