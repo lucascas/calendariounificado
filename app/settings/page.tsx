@@ -14,6 +14,7 @@ import { Trash2, ArrowLeft, Check, X, Edit2, UserPlus } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { ColorPicker } from "@/components/color-picker"
 import { InviteDialog } from "@/components/invite-dialog"
+import { InvitationsSection } from "@/components/invitations-section"
 import { usePreferences } from "@/hooks/use-preferences"
 import type { UserPreferences } from "@/lib/preferences-storage"
 
@@ -423,6 +424,9 @@ export default function SettingsPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Nueva sección de invitaciones */}
+          <InvitationsSection />
 
           <Card>
             <CardHeader>
