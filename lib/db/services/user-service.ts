@@ -64,30 +64,39 @@ export const UserService = {
   async createUserWithOAuth(oauthData: OAuthUserData): Promise<IUser> {
     await connectToDatabase()
 
-    // Verificar si el usuario ya existe
-    const existingUser = await User.findOne({
-      $or: [{ email: oauthData.email }, { providerId: oauthData.providerId }],
-    })
+    // Verificar si el usuario ya existe por EMAIL (más importante que providerId)
+    const existingUser = await User.findOne({ email: oauthData.email })
 
     if (existingUser) {
-      // Si existe, actualizar información y devolver
+      // Si existe, actualizar información pero MANTENER cuentas existentes
+      console.log(
+        "🔍 [DEBUG] Usuario existente encontrado, manteniendo cuentas:",
+        existingUser.calendarAccounts?.length || 0,
+      )
+
       existingUser.name = oauthData.name
       existingUser.picture = oauthData.picture
       existingUser.lastLogin = new Date()
+
+      // Solo actualizar provider si no tiene uno
+      if (!existingUser.authProvider) {
+        existingUser.authProvider = oauthData.provider
+        existingUser.providerId = oauthData.providerId
+      }
+
       await existingUser.save()
       return existingUser
     }
 
-    // Crear nuevo usuario
+    // Solo crear nuevo usuario si realmente no existe
     const newUser = new User({
-      username: oauthData.email, // Usar email como username para OAuth
+      username: oauthData.email,
       email: oauthData.email,
       name: oauthData.name,
       authProvider: oauthData.provider,
       providerId: oauthData.providerId,
       picture: oauthData.picture,
       calendarAccounts: [],
-      // No establecer password para usuarios OAuth
     })
 
     await newUser.save()
