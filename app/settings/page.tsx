@@ -227,6 +227,7 @@ export default function SettingsPage() {
         </div>
 
         <div className="grid gap-6">
+          {/* Sección de cuentas conectadas */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
@@ -425,9 +426,10 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          {/* Nueva sección de invitaciones */}
+          {/* Nueva sección de invitaciones - AQUÍ DEBE ESTAR */}
           <InvitationsSection />
 
+          {/* Sección de preferencias */}
           <Card>
             <CardHeader>
               <CardTitle>Preferencias de visualización</CardTitle>
