@@ -3,21 +3,35 @@ import { connectToDatabase } from "@/lib/db/mongodb"
 import { User } from "@/lib/db/models/user"
 import { Invitation } from "@/lib/db/models/invitation"
 import bcrypt from "bcryptjs"
+import { sign } from "jsonwebtoken"
+import { authConfig } from "@/lib/auth-config"
 
 export async function POST(request: Request) {
   try {
     const body = await request.json()
     const { username, password, email, name, invitationToken } = body
 
-    if (!username || !password) {
-      return NextResponse.json({ error: "Se requiere nombre de usuario y contraseña" }, { status: 400 })
+    console.log("Registro de usuario:", { username, email, invitationToken })
+
+    // Validar datos requeridos
+    if (!username || !password || !email) {
+      return NextResponse.json({ error: "Faltan datos requeridos" }, { status: 400 })
     }
 
     // Conectar a la base de datos
     await connectToDatabase()
 
+    // Verificar si el usuario ya existe
+    const existingUser = await User.findOne({
+      $or: [{ username }, { email }],
+    })
+
+    if (existingUser) {
+      return NextResponse.json({ error: "El usuario o email ya existe" }, { status: 400 })
+    }
+
+    let inviterUserId = null
     let invitation = null
-    let inviterId = null
 
     // Si hay un token de invitación, validarlo
     if (invitationToken) {
@@ -36,16 +50,8 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "El email no coincide con la invitación" }, { status: 400 })
       }
 
-      inviterId = invitation.inviterId
-    }
-
-    // Verificar si el usuario ya existe
-    const existingUser = await User.findOne({
-      $or: [{ username }, { email }],
-    })
-
-    if (existingUser) {
-      return NextResponse.json({ error: "El nombre de usuario o email ya está en uso" }, { status: 409 })
+      inviterUserId = invitation.inviterId
+      console.log(`Usuario registrándose con invitación de: ${invitation.inviterEmail}`)
     }
 
     // Encriptar la contraseña
@@ -56,46 +62,66 @@ export async function POST(request: Request) {
       username,
       password: hashedPassword,
       email,
-      name,
+      name: name || username,
+      authProvider: "local",
       calendarAccounts: [],
-      invitedBy: inviterId, // Asociar con el usuario que invitó
-      sharedCalendars: inviterId ? [inviterId] : [], // Puede ver los calendarios del invitador
-      allowedViewers: [], // Inicialmente nadie puede ver sus calendarios
+      invitedBy: inviterUserId, // Establecer quién lo invitó
+      sharedCalendars: inviterUserId ? [inviterUserId] : [], // Puede ver calendarios del invitador
+      isActive: true,
     })
 
     await newUser.save()
+    console.log(`Usuario creado: ${newUser.email} (ID: ${newUser._id})`)
 
-    // Si había una invitación, marcarla como aceptada Y actualizar permisos del invitador
-    if (invitation && inviterId) {
+    // Si fue invitado, actualizar las relaciones
+    if (inviterUserId && invitation) {
+      // Marcar la invitación como aceptada
       invitation.status = "accepted"
       invitation.acceptedAt = new Date()
       await invitation.save()
 
-      // Permitir que el invitador vea los calendarios del nuevo usuario
-      await User.findByIdAndUpdate(inviterId, {
-        $addToSet: { allowedViewers: newUser._id.toString() },
-      })
-
-      console.log(`Usuario ${newUser.email} registrado e invitado por ${inviterId}`)
-      console.log(`${newUser.email} puede ver calendarios de: [${inviterId}]`)
-      console.log(`${inviterId} puede ver calendarios de: [${newUser._id}]`)
+      // Actualizar el usuario que invitó para que pueda ver los calendarios del nuevo usuario
+      const inviterUser = await User.findById(inviterUserId)
+      if (inviterUser) {
+        if (!inviterUser.sharedCalendars) {
+          inviterUser.sharedCalendars = []
+        }
+        if (!inviterUser.sharedCalendars.includes(newUser._id.toString())) {
+          inviterUser.sharedCalendars.push(newUser._id.toString())
+        }
+        await inviterUser.save()
+        console.log(`Relación establecida: ${inviterUser.email} puede ver calendarios de ${newUser.email}`)
+      }
     }
 
-    return NextResponse.json(
-      {
-        success: true,
-        user: {
-          id: newUser._id,
-          username: newUser.username,
-          email: newUser.email,
-          name: newUser.name,
-        },
-        invitedBy: inviterId,
+    // Crear token JWT
+    const token = sign({ id: newUser._id.toString() }, authConfig.jwt.secret, {
+      expiresIn: authConfig.jwt.expiresIn,
+    })
+
+    // Crear la respuesta con la cookie
+    const response = NextResponse.json({
+      success: true,
+      message: "Usuario registrado exitosamente",
+      user: {
+        id: newUser._id,
+        username: newUser.username,
+        email: newUser.email,
+        name: newUser.name,
       },
-      { status: 201 },
-    )
+    })
+
+    // Establecer la cookie del token
+    response.cookies.set("auth_token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60, // 7 días
+    })
+
+    return response
   } catch (error) {
-    console.error("Error en registro:", error)
+    console.error("Error en el registro:", error)
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }

@@ -10,12 +10,13 @@ export function useCalendarAccounts() {
   const [error, setError] = useState<string | null>(null)
   const { toast } = useToast()
 
-  // Cargar cuentas de calendario
+  // Cargar cuentas de calendario (incluyendo compartidas)
   const loadAccounts = async () => {
     try {
       setLoading(true)
       setError(null)
 
+      console.log("🔄 Cargando cuentas de calendario...")
       const response = await fetch("/api/calendar-accounts/shared")
 
       if (!response.ok) {
@@ -23,20 +24,26 @@ export function useCalendarAccounts() {
       }
 
       const data = await response.json()
-      setAccounts(data.accounts)
+      console.log("📊 Cuentas recibidas:", data.accounts)
 
-      // Agregar logging para debug
-      console.log("Cuentas cargadas:", data.accounts)
-      console.log(
-        "Cuentas propias:",
-        data.accounts.filter((acc) => acc.isOwn),
-      )
-      console.log(
-        "Cuentas compartidas:",
-        data.accounts.filter((acc) => !acc.isOwn),
-      )
+      setAccounts(data.accounts || [])
+
+      // Debug logging
+      const ownAccounts = (data.accounts || []).filter((acc: any) => acc.isOwn)
+      const sharedAccounts = (data.accounts || []).filter((acc: any) => !acc.isOwn)
+
+      console.log(`✅ Cuentas cargadas: ${data.accounts?.length || 0} total`)
+      console.log(`   - Propias: ${ownAccounts.length}`)
+      console.log(`   - Compartidas: ${sharedAccounts.length}`)
+
+      if (sharedAccounts.length > 0) {
+        console.log("📋 Cuentas compartidas:")
+        sharedAccounts.forEach((acc: any, index: number) => {
+          console.log(`   ${index + 1}. ${acc.email} (${acc.provider}) - Propietario: ${acc.ownerEmail}`)
+        })
+      }
     } catch (error) {
-      console.error("Error al cargar cuentas de calendario:", error)
+      console.error("❌ Error al cargar cuentas de calendario:", error)
       setError(error instanceof Error ? error.message : "Error desconocido")
 
       toast({

@@ -1,29 +1,27 @@
 import mongoose, { Schema, type Document } from "mongoose"
-import { CalendarAccountSchema, type CalendarAccount } from "./calendar-account"
+import type { CalendarAccount } from "./calendar-account"
 
 // Interfaz para el documento de usuario
 export interface IUser extends Document {
   username: string
-  password?: string // Opcional para usuarios OAuth
+  password?: string
   email: string
   name?: string
   authProvider: "local" | "google" | "microsoft"
-  providerId?: string // ID del proveedor OAuth
-  picture?: string // URL de la imagen de perfil
-  createdAt: Date
-  updatedAt: Date
-  lastLogin?: Date
+  providerId?: string
+  picture?: string
   calendarAccounts: CalendarAccount[]
-  invitedBy?: string // ID del usuario que invitó a este usuario
+  lastLogin?: Date
+  invitedBy?: string // ID del usuario que lo invitó
   sharedCalendars?: string[] // IDs de usuarios cuyos calendarios puede ver
-  allowedViewers?: string[] // IDs de usuarios que pueden ver mis calendarios
+  isActive?: boolean
 }
 
 // Esquema de usuario
 const UserSchema: Schema = new Schema(
   {
     username: { type: String, required: true, unique: true },
-    password: { type: String }, // No requerido para OAuth
+    password: { type: String }, // Opcional para usuarios OAuth
     email: { type: String, required: true, unique: true },
     name: { type: String },
     authProvider: {
@@ -31,24 +29,39 @@ const UserSchema: Schema = new Schema(
       enum: ["local", "google", "microsoft"],
       default: "local",
     },
-    providerId: { type: String }, // ID único del proveedor OAuth
-    picture: { type: String }, // URL de imagen de perfil
+    providerId: { type: String }, // ID del proveedor OAuth
+    picture: { type: String }, // URL de la imagen de perfil
+    calendarAccounts: [
+      {
+        id: { type: String, required: true },
+        provider: {
+          type: String,
+          enum: ["google", "microsoft"],
+          required: true,
+        },
+        email: { type: String, required: true },
+        name: { type: String },
+        accessToken: { type: String, required: true },
+        refreshToken: { type: String },
+        expiresAt: { type: Number },
+        lastRefreshed: { type: Number },
+        color: { type: String },
+        simulated: { type: Boolean, default: false },
+      },
+    ],
     lastLogin: { type: Date },
-    calendarAccounts: [CalendarAccountSchema],
-    invitedBy: { type: String }, // ID del usuario que invitó
-    sharedCalendars: [{ type: String }], // Calendarios que puedo ver
-    allowedViewers: [{ type: String }], // Usuarios que pueden ver mis calendarios
+    invitedBy: { type: String }, // ID del usuario que lo invitó
+    sharedCalendars: [{ type: String }], // IDs de usuarios cuyos calendarios puede ver
+    isActive: { type: Boolean, default: true },
   },
   { timestamps: true },
 )
 
 // Crear índices para mejorar el rendimiento
+UserSchema.index({ username: 1 })
 UserSchema.index({ email: 1 })
 UserSchema.index({ providerId: 1 })
-UserSchema.index({ username: 1 })
 UserSchema.index({ invitedBy: 1 })
-UserSchema.index({ sharedCalendars: 1 })
-UserSchema.index({ allowedViewers: 1 })
 
 // Crear el modelo si no existe
 export const User = mongoose.models.User || mongoose.model<IUser>("User", UserSchema)
