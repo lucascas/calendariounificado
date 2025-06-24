@@ -47,41 +47,56 @@ export async function GET(request: Request) {
     const allAccounts = []
 
     // 1. Agregar las cuentas propias del usuario
-    if (currentUser.calendarAccounts && currentUser.calendarAccounts.length > 0) {
-      const ownAccounts = currentUser.calendarAccounts.map((account: any) => ({
-        ...account.toObject(),
-        ownerName: currentUser.name || currentUser.username,
-        ownerEmail: currentUser.email,
-        isOwn: true,
-        canEdit: true,
+    const ownAccounts = (currentUser.calendarAccounts || []).map((account: any) => ({
+      ...account,
+      isOwn: true,
+      canEdit: true,
+    }))
+    allAccounts.push(...ownAccounts)
+
+    // 2. Buscar usuarios que este usuario ha invitado (y que han aceptado)
+    const invitedUsers = await User.find({
+      invitedBy: userId,
+      isActive: true,
+    })
+
+    for (const invitedUser of invitedUsers) {
+      const sharedAccounts = (invitedUser.calendarAccounts || []).map((account: any) => ({
+        ...account,
+        id: `shared_${invitedUser._id}_${account.id}`, // ID único para cuenta compartida
+        isOwn: false,
+        canEdit: false,
+        ownerName: invitedUser.name || invitedUser.username,
+        ownerEmail: invitedUser.email,
+        originalAccountId: account.id,
+        originalOwnerId: invitedUser._id.toString(),
+        name: account.name || `${invitedUser.name || invitedUser.username} - ${account.provider}`,
       }))
-      allAccounts.push(...ownAccounts)
+      allAccounts.push(...sharedAccounts)
     }
 
-    // 2. Agregar las cuentas de usuarios cuyos calendarios puede ver
-    if (currentUser.sharedCalendars && currentUser.sharedCalendars.length > 0) {
-      for (const sharedUserId of currentUser.sharedCalendars) {
-        const sharedUser = await User.findById(sharedUserId)
-        if (sharedUser && sharedUser.calendarAccounts) {
-          const sharedAccounts = sharedUser.calendarAccounts.map((account: any) => ({
-            ...account.toObject(),
-            id: `shared_${sharedUserId}_${account.id}`, // ID único para cuentas compartidas
-            ownerName: sharedUser.name || sharedUser.username,
-            ownerEmail: sharedUser.email,
-            isOwn: false,
-            canEdit: false,
-            originalAccountId: account.id,
-            originalOwnerId: sharedUserId,
-          }))
-          allAccounts.push(...sharedAccounts)
-        }
+    // 3. Si este usuario fue invitado por alguien, agregar las cuentas del invitador
+    if (currentUser.invitedBy) {
+      const inviterUser = await User.findById(currentUser.invitedBy)
+      if (inviterUser) {
+        const inviterAccounts = (inviterUser.calendarAccounts || []).map((account: any) => ({
+          ...account,
+          id: `shared_${inviterUser._id}_${account.id}`, // ID único para cuenta compartida
+          isOwn: false,
+          canEdit: false,
+          ownerName: inviterUser.name || inviterUser.username,
+          ownerEmail: inviterUser.email,
+          originalAccountId: account.id,
+          originalOwnerId: inviterUser._id.toString(),
+          name: account.name || `${inviterUser.name || inviterUser.username} - ${account.provider}`,
+        }))
+        allAccounts.push(...inviterAccounts)
       }
     }
 
     console.log(`Usuario ${currentUser.email} tiene acceso a ${allAccounts.length} cuentas de calendario`)
-    console.log(
-      `Propias: ${allAccounts.filter((a) => a.isOwn).length}, Compartidas: ${allAccounts.filter((a) => !a.isOwn).length}`,
-    )
+    console.log(`- Propias: ${ownAccounts.length}`)
+    console.log(`- Compartidas: ${allAccounts.length - ownAccounts.length}`)
 
     return NextResponse.json({
       accounts: allAccounts,

@@ -16,7 +16,7 @@ export function useCalendarAccounts() {
       setLoading(true)
       setError(null)
 
-      const response = await fetch("/api/calendar-accounts")
+      const response = await fetch("/api/calendar-accounts/shared")
 
       if (!response.ok) {
         throw new Error("Error al cargar las cuentas de calendario")
@@ -24,6 +24,17 @@ export function useCalendarAccounts() {
 
       const data = await response.json()
       setAccounts(data.accounts)
+
+      // Agregar logging para debug
+      console.log("Cuentas cargadas:", data.accounts)
+      console.log(
+        "Cuentas propias:",
+        data.accounts.filter((acc) => acc.isOwn),
+      )
+      console.log(
+        "Cuentas compartidas:",
+        data.accounts.filter((acc) => !acc.isOwn),
+      )
     } catch (error) {
       console.error("Error al cargar cuentas de calendario:", error)
       setError(error instanceof Error ? error.message : "Error desconocido")

@@ -202,6 +202,13 @@ export default function SettingsPage() {
   const googleAccounts = calendarAccounts.filter((account) => account.provider === "google")
   const microsoftAccounts = calendarAccounts.filter((account) => account.provider === "microsoft")
 
+  const ownGoogleAccounts = calendarAccounts.filter((account) => account.provider === "google" && account.isOwn)
+  const ownMicrosoftAccounts = calendarAccounts.filter((account) => account.provider === "microsoft" && account.isOwn)
+  const sharedGoogleAccounts = calendarAccounts.filter((account) => account.provider === "google" && !account.isOwn)
+  const sharedMicrosoftAccounts = calendarAccounts.filter(
+    (account) => account.provider === "microsoft" && !account.isOwn,
+  )
+
   const defaultColors = {
     google: "#4285F4",
     microsoft: "#7B83EB",
@@ -250,10 +257,10 @@ export default function SettingsPage() {
                 </>
               ) : (
                 <>
-                  {googleAccounts.length > 0 && (
+                  {ownGoogleAccounts.length > 0 && (
                     <div className="space-y-4">
-                      <h3 className="font-medium text-lg">Google Calendar</h3>
-                      {googleAccounts.map((account) => (
+                      <h3 className="font-medium text-lg">Google Calendar (Mis cuentas)</h3>
+                      {ownGoogleAccounts.map((account) => (
                         <div key={account.id} className="border p-3 rounded-md">
                           <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center">
@@ -329,10 +336,37 @@ export default function SettingsPage() {
                     </div>
                   )}
 
-                  {microsoftAccounts.length > 0 && (
+                  {sharedGoogleAccounts.length > 0 && (
                     <div className="space-y-4 mt-6">
-                      <h3 className="font-medium text-lg">Microsoft Teams</h3>
-                      {microsoftAccounts.map((account) => (
+                      <h3 className="font-medium text-lg">Google Calendar (Compartidas)</h3>
+                      {sharedGoogleAccounts.map((account) => (
+                        <div key={account.id} className="border p-3 rounded-md bg-muted/50">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center">
+                              <ColorPicker
+                                value={account.color || defaultColors.google}
+                                onChange={(color) => updateAccountColor(account.id, color)}
+                                disabled={!account.canEdit}
+                              />
+                              <div className="ml-3">
+                                <p className="font-medium">{account.name || getDisplayName(account)}</p>
+                                <p className="text-sm text-muted-foreground">{account.email}</p>
+                                <p className="text-xs text-muted-foreground">Compartida por: {account.ownerName}</p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Solo lectura - Compartida por {account.ownerName}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {ownMicrosoftAccounts.length > 0 && (
+                    <div className="space-y-4 mt-6">
+                      <h3 className="font-medium text-lg">Microsoft Teams (Mis cuentas)</h3>
+                      {ownMicrosoftAccounts.map((account) => (
                         <div key={account.id} className="border p-3 rounded-md">
                           <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center">
@@ -405,6 +439,33 @@ export default function SettingsPage() {
                       <Button variant="outline" className="w-full" onClick={() => reconnectAccount("microsoft")}>
                         Agregar otra cuenta de Microsoft
                       </Button>
+                    </div>
+                  )}
+
+                  {sharedMicrosoftAccounts.length > 0 && (
+                    <div className="space-y-4 mt-6">
+                      <h3 className="font-medium text-lg">Microsoft Teams (Compartidas)</h3>
+                      {sharedMicrosoftAccounts.map((account) => (
+                        <div key={account.id} className="border p-3 rounded-md bg-muted/50">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center">
+                              <ColorPicker
+                                value={account.color || defaultColors.microsoft}
+                                onChange={(color) => updateAccountColor(account.id, color)}
+                                disabled={!account.canEdit}
+                              />
+                              <div className="ml-3">
+                                <p className="font-medium">{account.name || getDisplayName(account)}</p>
+                                <p className="text-sm text-muted-foreground">{account.email}</p>
+                                <p className="text-xs text-muted-foreground">Compartida por: {account.ownerName}</p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Solo lectura - Compartida por {account.ownerName}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
 
