@@ -1,8 +1,8 @@
-import { authConfig } from "../../../lib/auth-config"
+import { authConfig } from "@/lib/auth-config"
 import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
-import { microsoft } from "../../../lib/auth"
-import { UserService } from "../../../lib/db/services/user-service"
+import { microsoft } from "@/lib/auth"
+import { UserService } from "@/lib/db/services/user-service"
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const url = new URL(request.url)
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         name: microsoftUser.displayName,
         firstName: microsoftUser.givenName,
         lastName: microsoftUser.surname,
-        profileImageUrl: "", // Microsoft Graph API doesn't directly provide a profile image URL.  Consider using the email hash to generate a gravatar or similar.
+        profileImageUrl: "",
       })
     }
 

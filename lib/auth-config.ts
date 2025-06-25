@@ -1,5 +1,4 @@
-// Configuración centralizada de autenticación
-
+// Configuración de autenticación para uso interno
 export const authConfig = {
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "",
@@ -61,3 +60,5 @@ export function validateAuthConfig() {
     errors,
   }
 }
+
+export default authConfig

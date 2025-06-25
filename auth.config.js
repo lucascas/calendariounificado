@@ -1,9 +1,21 @@
-/**
- * Stub mínimo para satisfacer el análisis de dependencias en tiempo de build.
- * Aporta el export con nombre `authConfig` que se está reclamando.
- * Rellena este objeto con la configuración real si quieres usarlo en runtime.
- */
-export const authConfig = {}
+// Archivo de configuración de autenticación
+// Exporta EXACTAMENTE lo que el build system espera
 
-/* Opcional: exportación por defecto si alguna parte del código la importara así */
-export default authConfig
+const authConfig = {
+  providers: {
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID || "",
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+    },
+    microsoft: {
+      clientId: process.env.MICROSOFT_CLIENT_ID || "",
+      clientSecret: process.env.MICROSOFT_CLIENT_SECRET || "",
+    },
+  },
+}
+
+// Named export (lo que busca el sistema)
+module.exports = { authConfig }
+
+// También como export default por si acaso
+module.exports.default = authConfig

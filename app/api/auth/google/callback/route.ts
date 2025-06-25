@@ -1,1 +1,1 @@
-import { authConfig } from "../../../lib/auth-config"
+import { authConfig } from "@/lib/auth-config"
